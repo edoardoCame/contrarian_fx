@@ -1,0 +1,295 @@
+2025-08-06 21:32:23,817 - INFO - === STARTING FOREX DATA COLLECTION ===
+2025-08-06 21:32:23,817 - INFO - Target pairs: 20
+2025-08-06 21:32:23,817 - INFO - Date range: 2000-01-01 to 2025-08-06
+2025-08-06 21:32:23,817 - INFO - Step 1: Downloading forex data
+2025-08-06 21:32:23,817 - INFO - Downloading data for EURUSD=X
+2025-08-06 21:32:36,629 - INFO - Validating OHLC data for EURUSD=X
+2025-08-06 21:32:36,632 - WARNING - Found 49 rows with invalid high prices for EURUSD=X
+2025-08-06 21:32:36,634 - WARNING - Found 69 rows with invalid low prices for EURUSD=X
+2025-08-06 21:32:36,639 - WARNING - Found 1 potential outliers in low for EURUSD=X
+2025-08-06 21:32:36,641 - INFO - Data quality for EURUSD=X:
+2025-08-06 21:32:36,641 - INFO -   Total rows: 5628
+2025-08-06 21:32:36,641 - INFO -   Missing data percentage: 0.00%
+2025-08-06 21:32:36,641 - INFO -   Zero volume days: 5628
+2025-08-06 21:32:36,641 - INFO - Successfully downloaded 5628 rows for EURUSD=X
+2025-08-06 21:32:36,641 - INFO - Date range: 2003-12-01 00:00:00+00:00 to 2025-08-05 00:00:00+01:00
+2025-08-06 21:32:36,641 - INFO - Downloading data for GBPUSD=X
+2025-08-06 21:32:40,900 - INFO - Validating OHLC data for GBPUSD=X
+2025-08-06 21:32:40,902 - WARNING - Found 50 rows with invalid high prices for GBPUSD=X
+2025-08-06 21:32:40,904 - WARNING - Found 47 rows with invalid low prices for GBPUSD=X
+2025-08-06 21:32:40,910 - INFO - Data quality for GBPUSD=X:
+2025-08-06 21:32:40,910 - INFO -   Total rows: 5640
+2025-08-06 21:32:40,910 - INFO -   Missing data percentage: 0.00%
+2025-08-06 21:32:40,911 - INFO -   Zero volume days: 5640
+2025-08-06 21:32:40,911 - INFO - Successfully downloaded 5640 rows for GBPUSD=X
+2025-08-06 21:32:40,911 - INFO - Date range: 2003-12-01 00:00:00+00:00 to 2025-08-05 00:00:00+01:00
+2025-08-06 21:32:40,911 - INFO - Downloading data for USDJPY=X
+2025-08-06 21:32:44,979 - INFO - Validating OHLC data for USDJPY=X
+2025-08-06 21:32:44,982 - WARNING - Found 127 rows with invalid high prices for USDJPY=X
+2025-08-06 21:32:44,983 - WARNING - Found 117 rows with invalid low prices for USDJPY=X
+2025-08-06 21:32:44,990 - INFO - Data quality for USDJPY=X:
+2025-08-06 21:32:44,990 - INFO -   Total rows: 6648
+2025-08-06 21:32:44,990 - INFO -   Missing data percentage: 0.00%
+2025-08-06 21:32:44,990 - INFO -   Zero volume days: 6648
+2025-08-06 21:32:44,990 - INFO - Successfully downloaded 6648 rows for USDJPY=X
+2025-08-06 21:32:44,990 - INFO - Date range: 2000-01-03 00:00:00+00:00 to 2025-08-05 00:00:00+01:00
+2025-08-06 21:32:44,990 - INFO - Downloading data for USDCHF=X
+2025-08-06 21:32:49,591 - INFO - Validating OHLC data for USDCHF=X
+2025-08-06 21:32:49,595 - WARNING - Found 41 rows with invalid high prices for USDCHF=X
+2025-08-06 21:32:49,596 - WARNING - Found 53 rows with invalid low prices for USDCHF=X
+2025-08-06 21:32:49,602 - INFO - Data quality for USDCHF=X:
+2025-08-06 21:32:49,602 - INFO -   Total rows: 5694
+2025-08-06 21:32:49,602 - INFO -   Missing data percentage: 0.00%
+2025-08-06 21:32:49,602 - INFO -   Zero volume days: 5694
+2025-08-06 21:32:49,602 - INFO - Successfully downloaded 5694 rows for USDCHF=X
+2025-08-06 21:32:49,603 - INFO - Date range: 2003-09-17 00:00:00+01:00 to 2025-08-05 00:00:00+01:00
+2025-08-06 21:32:49,603 - INFO - Downloading data for AUDUSD=X
+2025-08-06 21:32:53,523 - INFO - Validating OHLC data for AUDUSD=X
+2025-08-06 21:32:53,526 - WARNING - Found 59 rows with invalid high prices for AUDUSD=X
+2025-08-06 21:32:53,527 - WARNING - Found 72 rows with invalid low prices for AUDUSD=X
+2025-08-06 21:32:53,530 - WARNING - Found 1 potential outliers in open for AUDUSD=X
+2025-08-06 21:32:53,531 - WARNING - Found 2 potential outliers in high for AUDUSD=X
+2025-08-06 21:32:53,534 - WARNING - Found 1 potential outliers in close for AUDUSD=X
+2025-08-06 21:32:53,534 - INFO - Data quality for AUDUSD=X:
+2025-08-06 21:32:53,534 - INFO -   Total rows: 5004
+2025-08-06 21:32:53,534 - INFO -   Missing data percentage: 0.00%
+2025-08-06 21:32:53,534 - INFO -   Zero volume days: 5004
+2025-08-06 21:32:53,535 - INFO - Successfully downloaded 5004 rows for AUDUSD=X
+2025-08-06 21:32:53,535 - INFO - Date range: 2006-05-16 00:00:00+01:00 to 2025-08-05 00:00:00+01:00
+2025-08-06 21:32:53,535 - INFO - Downloading data for USDCAD=X
+2025-08-06 21:32:57,564 - INFO - Validating OHLC data for USDCAD=X
+2025-08-06 21:32:57,567 - WARNING - Found 54 rows with invalid high prices for USDCAD=X
+2025-08-06 21:32:57,568 - WARNING - Found 52 rows with invalid low prices for USDCAD=X
+2025-08-06 21:32:57,578 - INFO - Data quality for USDCAD=X:
+2025-08-06 21:32:57,578 - INFO -   Total rows: 5696
+2025-08-06 21:32:57,578 - INFO -   Missing data percentage: 0.00%
+2025-08-06 21:32:57,578 - INFO -   Zero volume days: 5696
+2025-08-06 21:32:57,578 - INFO - Successfully downloaded 5696 rows for USDCAD=X
+2025-08-06 21:32:57,579 - INFO - Date range: 2003-09-17 00:00:00+01:00 to 2025-08-05 00:00:00+01:00
+2025-08-06 21:32:57,579 - INFO - Downloading data for NZDUSD=X
+2025-08-06 21:33:01,156 - INFO - Validating OHLC data for NZDUSD=X
+2025-08-06 21:33:01,159 - WARNING - Found 174 rows with invalid high prices for NZDUSD=X
+2025-08-06 21:33:01,160 - WARNING - Found 177 rows with invalid low prices for NZDUSD=X
+2025-08-06 21:33:01,165 - WARNING - Found 3 potential outliers in high for NZDUSD=X
+2025-08-06 21:33:01,169 - INFO - Data quality for NZDUSD=X:
+2025-08-06 21:33:01,169 - INFO -   Total rows: 5629
+2025-08-06 21:33:01,169 - INFO -   Missing data percentage: 0.00%
+2025-08-06 21:33:01,169 - INFO -   Zero volume days: 5629
+2025-08-06 21:33:01,169 - INFO - Successfully downloaded 5629 rows for NZDUSD=X
+2025-08-06 21:33:01,169 - INFO - Date range: 2003-12-01 00:00:00+00:00 to 2025-08-05 00:00:00+01:00
+2025-08-06 21:33:01,169 - INFO - Downloading data for EURGBP=X
+2025-08-06 21:33:05,527 - INFO - Validating OHLC data for EURGBP=X
+2025-08-06 21:33:05,530 - WARNING - Found 30 rows with invalid high prices for EURGBP=X
+2025-08-06 21:33:05,532 - WARNING - Found 35 rows with invalid low prices for EURGBP=X
+2025-08-06 21:33:05,538 - WARNING - Found 1 potential outliers in low for EURGBP=X
+2025-08-06 21:33:05,540 - INFO - Data quality for EURGBP=X:
+2025-08-06 21:33:05,540 - INFO -   Total rows: 6668
+2025-08-06 21:33:05,540 - INFO -   Missing data percentage: 0.00%
+2025-08-06 21:33:05,540 - INFO -   Zero volume days: 6668
+2025-08-06 21:33:05,540 - INFO - Successfully downloaded 6668 rows for EURGBP=X
+2025-08-06 21:33:05,541 - INFO - Date range: 2000-01-03 00:00:00+00:00 to 2025-08-05 00:00:00+01:00
+2025-08-06 21:33:05,541 - INFO - Downloading data for EURJPY=X
+2025-08-06 21:33:09,525 - INFO - Validating OHLC data for EURJPY=X
+2025-08-06 21:33:09,529 - WARNING - Found 110 rows with invalid high prices for EURJPY=X
+2025-08-06 21:33:09,531 - WARNING - Found 106 rows with invalid low prices for EURJPY=X
+2025-08-06 21:33:09,538 - INFO - Data quality for EURJPY=X:
+2025-08-06 21:33:09,538 - INFO -   Total rows: 5853
+2025-08-06 21:33:09,538 - INFO -   Missing data percentage: 0.00%
+2025-08-06 21:33:09,538 - INFO -   Zero volume days: 5853
+2025-08-06 21:33:09,538 - INFO - Successfully downloaded 5853 rows for EURJPY=X
+2025-08-06 21:33:09,539 - INFO - Date range: 2003-01-23 00:00:00+00:00 to 2025-08-05 00:00:00+01:00
+2025-08-06 21:33:09,539 - INFO - Downloading data for EURCHF=X
+2025-08-06 21:33:14,860 - INFO - Validating OHLC data for EURCHF=X
+2025-08-06 21:33:14,863 - WARNING - Found 37 rows with invalid high prices for EURCHF=X
+2025-08-06 21:33:14,864 - WARNING - Found 39 rows with invalid low prices for EURCHF=X
+2025-08-06 21:33:14,870 - INFO - Data quality for EURCHF=X:
+2025-08-06 21:33:14,870 - INFO -   Total rows: 5851
+2025-08-06 21:33:14,871 - INFO -   Missing data percentage: 0.00%
+2025-08-06 21:33:14,871 - INFO -   Zero volume days: 5851
+2025-08-06 21:33:14,871 - INFO - Successfully downloaded 5851 rows for EURCHF=X
+2025-08-06 21:33:14,871 - INFO - Date range: 2003-01-23 00:00:00+00:00 to 2025-08-05 00:00:00+01:00
+2025-08-06 21:33:14,871 - INFO - Downloading data for EURAUD=X
+2025-08-06 21:33:19,008 - INFO - Validating OHLC data for EURAUD=X
+2025-08-06 21:33:19,011 - WARNING - Found 72 rows with invalid high prices for EURAUD=X
+2025-08-06 21:33:19,013 - WARNING - Found 59 rows with invalid low prices for EURAUD=X
+2025-08-06 21:33:19,021 - INFO - Data quality for EURAUD=X:
+2025-08-06 21:33:19,021 - INFO -   Total rows: 5645
+2025-08-06 21:33:19,021 - INFO -   Missing data percentage: 0.00%
+2025-08-06 21:33:19,021 - INFO -   Zero volume days: 5645
+2025-08-06 21:33:19,021 - INFO - Successfully downloaded 5645 rows for EURAUD=X
+2025-08-06 21:33:19,021 - INFO - Date range: 2003-12-01 00:00:00+00:00 to 2025-08-05 00:00:00+01:00
+2025-08-06 21:33:19,021 - INFO - Downloading data for EURCAD=X
+2025-08-06 21:33:22,895 - INFO - Validating OHLC data for EURCAD=X
+2025-08-06 21:33:22,897 - WARNING - Found 38 rows with invalid high prices for EURCAD=X
+2025-08-06 21:33:22,899 - WARNING - Found 38 rows with invalid low prices for EURCAD=X
+2025-08-06 21:33:22,906 - INFO - Data quality for EURCAD=X:
+2025-08-06 21:33:22,906 - INFO -   Total rows: 5631
+2025-08-06 21:33:22,906 - INFO -   Missing data percentage: 0.00%
+2025-08-06 21:33:22,906 - INFO -   Zero volume days: 5631
+2025-08-06 21:33:22,906 - INFO - Successfully downloaded 5631 rows for EURCAD=X
+2025-08-06 21:33:22,906 - INFO - Date range: 2003-12-01 00:00:00+00:00 to 2025-08-05 00:00:00+01:00
+2025-08-06 21:33:22,906 - INFO - Downloading data for EURNZD=X
+2025-08-06 21:33:26,755 - INFO - Validating OHLC data for EURNZD=X
+2025-08-06 21:33:26,759 - WARNING - Found 103 rows with invalid high prices for EURNZD=X
+2025-08-06 21:33:26,761 - WARNING - Found 74 rows with invalid low prices for EURNZD=X
+2025-08-06 21:33:26,763 - WARNING - Found 62 potential outliers in open for EURNZD=X
+2025-08-06 21:33:26,765 - WARNING - Found 64 potential outliers in high for EURNZD=X
+2025-08-06 21:33:26,767 - WARNING - Found 52 potential outliers in low for EURNZD=X
+2025-08-06 21:33:26,768 - WARNING - Found 61 potential outliers in close for EURNZD=X
+2025-08-06 21:33:26,769 - INFO - Data quality for EURNZD=X:
+2025-08-06 21:33:26,769 - INFO -   Total rows: 5645
+2025-08-06 21:33:26,769 - INFO -   Missing data percentage: 0.00%
+2025-08-06 21:33:26,769 - INFO -   Zero volume days: 5645
+2025-08-06 21:33:26,769 - INFO - Successfully downloaded 5645 rows for EURNZD=X
+2025-08-06 21:33:26,770 - INFO - Date range: 2003-12-01 00:00:00+00:00 to 2025-08-05 00:00:00+01:00
+2025-08-06 21:33:26,770 - INFO - Downloading data for GBPJPY=X
+2025-08-06 21:33:30,866 - INFO - Validating OHLC data for GBPJPY=X
+2025-08-06 21:33:30,869 - WARNING - Found 102 rows with invalid high prices for GBPJPY=X
+2025-08-06 21:33:30,871 - WARNING - Found 69 rows with invalid low prices for GBPJPY=X
+2025-08-06 21:33:30,878 - INFO - Data quality for GBPJPY=X:
+2025-08-06 21:33:30,878 - INFO -   Total rows: 5644
+2025-08-06 21:33:30,878 - INFO -   Missing data percentage: 0.00%
+2025-08-06 21:33:30,878 - INFO -   Zero volume days: 5644
+2025-08-06 21:33:30,878 - INFO - Successfully downloaded 5644 rows for GBPJPY=X
+2025-08-06 21:33:30,878 - INFO - Date range: 2003-12-01 00:00:00+00:00 to 2025-08-05 00:00:00+01:00
+2025-08-06 21:33:30,878 - INFO - Downloading data for GBPCHF=X
+2025-08-06 21:33:34,366 - INFO - Validating OHLC data for GBPCHF=X
+2025-08-06 21:33:34,369 - WARNING - Found 38 rows with invalid high prices for GBPCHF=X
+2025-08-06 21:33:34,371 - WARNING - Found 52 rows with invalid low prices for GBPCHF=X
+2025-08-06 21:33:34,378 - INFO - Data quality for GBPCHF=X:
+2025-08-06 21:33:34,378 - INFO -   Total rows: 5686
+2025-08-06 21:33:34,378 - INFO -   Missing data percentage: 0.00%
+2025-08-06 21:33:34,378 - INFO -   Zero volume days: 5686
+2025-08-06 21:33:34,378 - INFO - Successfully downloaded 5686 rows for GBPCHF=X
+2025-08-06 21:33:34,378 - INFO - Date range: 2003-10-01 00:00:00+01:00 to 2025-08-05 00:00:00+01:00
+2025-08-06 21:33:34,378 - INFO - Downloading data for GBPAUD=X
+2025-08-06 21:33:38,244 - INFO - Validating OHLC data for GBPAUD=X
+2025-08-06 21:33:38,247 - WARNING - Found 72 rows with invalid high prices for GBPAUD=X
+2025-08-06 21:33:38,248 - WARNING - Found 74 rows with invalid low prices for GBPAUD=X
+2025-08-06 21:33:38,254 - INFO - Data quality for GBPAUD=X:
+2025-08-06 21:33:38,255 - INFO -   Total rows: 5774
+2025-08-06 21:33:38,255 - INFO -   Missing data percentage: 0.00%
+2025-08-06 21:33:38,255 - INFO -   Zero volume days: 5774
+2025-08-06 21:33:38,255 - INFO - Successfully downloaded 5774 rows for GBPAUD=X
+2025-08-06 21:33:38,255 - INFO - Date range: 2003-06-03 00:00:00+01:00 to 2025-08-05 00:00:00+01:00
+2025-08-06 21:33:38,255 - INFO - Downloading data for GBPCAD=X
+2025-08-06 21:33:42,415 - INFO - Validating OHLC data for GBPCAD=X
+2025-08-06 21:33:42,419 - WARNING - Found 48 rows with invalid high prices for GBPCAD=X
+2025-08-06 21:33:42,422 - WARNING - Found 37 rows with invalid low prices for GBPCAD=X
+2025-08-06 21:33:42,431 - INFO - Data quality for GBPCAD=X:
+2025-08-06 21:33:42,431 - INFO -   Total rows: 5645
+2025-08-06 21:33:42,431 - INFO -   Missing data percentage: 0.00%
+2025-08-06 21:33:42,431 - INFO -   Zero volume days: 5645
+2025-08-06 21:33:42,431 - INFO - Successfully downloaded 5645 rows for GBPCAD=X
+2025-08-06 21:33:42,431 - INFO - Date range: 2003-12-01 00:00:00+00:00 to 2025-08-05 00:00:00+01:00
+2025-08-06 21:33:42,431 - INFO - Downloading data for GBPNZD=X
+2025-08-06 21:33:47,885 - INFO - Validating OHLC data for GBPNZD=X
+2025-08-06 21:33:47,888 - WARNING - Found 87 rows with invalid high prices for GBPNZD=X
+2025-08-06 21:33:47,889 - WARNING - Found 72 rows with invalid low prices for GBPNZD=X
+2025-08-06 21:33:47,896 - INFO - Data quality for GBPNZD=X:
+2025-08-06 21:33:47,896 - INFO -   Total rows: 5773
+2025-08-06 21:33:47,896 - INFO -   Missing data percentage: 0.00%
+2025-08-06 21:33:47,896 - INFO -   Zero volume days: 5773
+2025-08-06 21:33:47,896 - INFO - Successfully downloaded 5773 rows for GBPNZD=X
+2025-08-06 21:33:47,896 - INFO - Date range: 2003-06-03 00:00:00+01:00 to 2025-08-05 00:00:00+01:00
+2025-08-06 21:33:47,896 - INFO - Downloading data for AUDJPY=X
+2025-08-06 21:33:51,334 - INFO - Validating OHLC data for AUDJPY=X
+2025-08-06 21:33:51,338 - WARNING - Found 106 rows with invalid high prices for AUDJPY=X
+2025-08-06 21:33:51,339 - WARNING - Found 100 rows with invalid low prices for AUDJPY=X
+2025-08-06 21:33:51,345 - INFO - Data quality for AUDJPY=X:
+2025-08-06 21:33:51,345 - INFO -   Total rows: 5647
+2025-08-06 21:33:51,345 - INFO -   Missing data percentage: 0.00%
+2025-08-06 21:33:51,345 - INFO -   Zero volume days: 5647
+2025-08-06 21:33:51,346 - INFO - Successfully downloaded 5647 rows for AUDJPY=X
+2025-08-06 21:33:51,346 - INFO - Date range: 2003-12-01 00:00:00+00:00 to 2025-08-05 00:00:00+01:00
+2025-08-06 21:33:51,346 - INFO - Downloading data for AUDCHF=X
+2025-08-06 21:33:55,426 - INFO - Validating OHLC data for AUDCHF=X
+2025-08-06 21:33:55,429 - WARNING - Found 143 rows with invalid high prices for AUDCHF=X
+2025-08-06 21:33:55,430 - WARNING - Found 145 rows with invalid low prices for AUDCHF=X
+2025-08-06 21:33:55,436 - INFO - Data quality for AUDCHF=X:
+2025-08-06 21:33:55,437 - INFO -   Total rows: 5619
+2025-08-06 21:33:55,437 - INFO -   Missing data percentage: 0.00%
+2025-08-06 21:33:55,437 - INFO -   Zero volume days: 5619
+2025-08-06 21:33:55,437 - INFO - Successfully downloaded 5619 rows for AUDCHF=X
+2025-08-06 21:33:55,437 - INFO - Date range: 2003-12-01 00:00:00+00:00 to 2025-08-05 00:00:00+01:00
+2025-08-06 21:33:55,437 - INFO - Successfully downloaded 20/20 pairs
+2025-08-06 21:33:55,437 - INFO - Step 2: Processing missing data
+2025-08-06 21:33:55,437 - INFO - Handling missing data for EURUSD=X
+2025-08-06 21:33:55,438 - INFO - Handling missing data for GBPUSD=X
+2025-08-06 21:33:55,440 - INFO - Handling missing data for USDJPY=X
+2025-08-06 21:33:55,441 - INFO - Handling missing data for USDCHF=X
+2025-08-06 21:33:55,442 - INFO - Handling missing data for AUDUSD=X
+2025-08-06 21:33:55,443 - INFO - Handling missing data for USDCAD=X
+2025-08-06 21:33:55,444 - INFO - Handling missing data for NZDUSD=X
+2025-08-06 21:33:55,445 - INFO - Handling missing data for EURGBP=X
+2025-08-06 21:33:55,446 - INFO - Handling missing data for EURJPY=X
+2025-08-06 21:33:55,448 - INFO - Handling missing data for EURCHF=X
+2025-08-06 21:33:55,449 - INFO - Handling missing data for EURAUD=X
+2025-08-06 21:33:55,450 - INFO - Handling missing data for EURCAD=X
+2025-08-06 21:33:55,451 - INFO - Handling missing data for EURNZD=X
+2025-08-06 21:33:55,452 - INFO - Handling missing data for GBPJPY=X
+2025-08-06 21:33:55,453 - INFO - Handling missing data for GBPCHF=X
+2025-08-06 21:33:55,454 - INFO - Handling missing data for GBPAUD=X
+2025-08-06 21:33:55,455 - INFO - Handling missing data for GBPCAD=X
+2025-08-06 21:33:55,457 - INFO - Handling missing data for GBPNZD=X
+2025-08-06 21:33:55,458 - INFO - Handling missing data for AUDJPY=X
+2025-08-06 21:33:55,459 - INFO - Handling missing data for AUDCHF=X
+2025-08-06 21:33:55,460 - INFO - Step 3: Synchronizing trading dates
+2025-08-06 21:33:55,460 - INFO - Synchronizing trading dates across all pairs
+2025-08-06 21:33:55,790 - INFO - Synchronizing to date range: 2000-01-03 00:00:00+00:00 to 2025-08-05 00:00:00+01:00
+2025-08-06 21:33:55,790 - INFO - Total business days in range: 6677
+2025-08-06 21:33:55,792 - INFO - Synchronized EURUSD=X: 5657 rows
+2025-08-06 21:33:55,794 - INFO - Synchronized GBPUSD=X: 5657 rows
+2025-08-06 21:33:55,795 - INFO - Synchronized USDJPY=X: 6677 rows
+2025-08-06 21:33:55,797 - INFO - Synchronized USDCHF=X: 5710 rows
+2025-08-06 21:33:55,799 - INFO - Synchronized AUDUSD=X: 5016 rows
+2025-08-06 21:33:55,801 - INFO - Synchronized USDCAD=X: 5710 rows
+2025-08-06 21:33:55,803 - INFO - Synchronized NZDUSD=X: 5657 rows
+2025-08-06 21:33:55,804 - INFO - Synchronized EURGBP=X: 6677 rows
+2025-08-06 21:33:55,806 - INFO - Synchronized EURJPY=X: 5879 rows
+2025-08-06 21:33:55,808 - INFO - Synchronized EURCHF=X: 5879 rows
+2025-08-06 21:33:55,810 - INFO - Synchronized EURAUD=X: 5657 rows
+2025-08-06 21:33:55,811 - INFO - Synchronized EURCAD=X: 5657 rows
+2025-08-06 21:33:55,813 - INFO - Synchronized EURNZD=X: 5657 rows
+2025-08-06 21:33:55,814 - INFO - Synchronized GBPJPY=X: 5657 rows
+2025-08-06 21:33:55,816 - INFO - Synchronized GBPCHF=X: 5700 rows
+2025-08-06 21:33:55,818 - INFO - Synchronized GBPAUD=X: 5786 rows
+2025-08-06 21:33:55,819 - INFO - Synchronized GBPCAD=X: 5657 rows
+2025-08-06 21:33:55,821 - INFO - Synchronized GBPNZD=X: 5786 rows
+2025-08-06 21:33:55,823 - INFO - Synchronized AUDJPY=X: 5657 rows
+2025-08-06 21:33:55,824 - INFO - Synchronized AUDCHF=X: 5657 rows
+2025-08-06 21:33:55,829 - INFO - Step 4: Saving individual parquet files
+2025-08-06 21:33:55,829 - INFO - Saving individual parquet files
+2025-08-06 21:33:56,077 - INFO - Saved EURUSD_X to advanced_engine/data/EURUSD_X.parquet
+2025-08-06 21:33:56,082 - INFO - Saved GBPUSD_X to advanced_engine/data/GBPUSD_X.parquet
+2025-08-06 21:33:56,087 - INFO - Saved USDJPY_X to advanced_engine/data/USDJPY_X.parquet
+2025-08-06 21:33:56,093 - INFO - Saved USDCHF_X to advanced_engine/data/USDCHF_X.parquet
+2025-08-06 21:33:56,099 - INFO - Saved AUDUSD_X to advanced_engine/data/AUDUSD_X.parquet
+2025-08-06 21:33:56,104 - INFO - Saved USDCAD_X to advanced_engine/data/USDCAD_X.parquet
+2025-08-06 21:33:56,109 - INFO - Saved NZDUSD_X to advanced_engine/data/NZDUSD_X.parquet
+2025-08-06 21:33:56,115 - INFO - Saved EURGBP_X to advanced_engine/data/EURGBP_X.parquet
+2025-08-06 21:33:56,120 - INFO - Saved EURJPY_X to advanced_engine/data/EURJPY_X.parquet
+2025-08-06 21:33:56,126 - INFO - Saved EURCHF_X to advanced_engine/data/EURCHF_X.parquet
+2025-08-06 21:33:56,131 - INFO - Saved EURAUD_X to advanced_engine/data/EURAUD_X.parquet
+2025-08-06 21:33:56,136 - INFO - Saved EURCAD_X to advanced_engine/data/EURCAD_X.parquet
+2025-08-06 21:33:56,141 - INFO - Saved EURNZD_X to advanced_engine/data/EURNZD_X.parquet
+2025-08-06 21:33:56,146 - INFO - Saved GBPJPY_X to advanced_engine/data/GBPJPY_X.parquet
+2025-08-06 21:33:56,151 - INFO - Saved GBPCHF_X to advanced_engine/data/GBPCHF_X.parquet
+2025-08-06 21:33:56,157 - INFO - Saved GBPAUD_X to advanced_engine/data/GBPAUD_X.parquet
+2025-08-06 21:33:56,162 - INFO - Saved GBPCAD_X to advanced_engine/data/GBPCAD_X.parquet
+2025-08-06 21:33:56,168 - INFO - Saved GBPNZD_X to advanced_engine/data/GBPNZD_X.parquet
+2025-08-06 21:33:56,173 - INFO - Saved AUDJPY_X to advanced_engine/data/AUDJPY_X.parquet
+2025-08-06 21:33:56,178 - INFO - Saved AUDCHF_X to advanced_engine/data/AUDCHF_X.parquet
+2025-08-06 21:33:56,179 - INFO - Step 5: Creating unified datasets
+2025-08-06 21:33:56,179 - INFO - Creating unified datasets
+2025-08-06 21:33:56,222 - INFO - Saved unified prices dataset: (6677, 20)
+2025-08-06 21:33:56,248 - INFO - Saved unified returns dataset: (6676, 20)
+2025-08-06 21:33:56,249 - INFO - Step 6: Generating summary report
+2025-08-06 21:33:56,249 - INFO - Generating data summary report
+2025-08-06 21:33:56,262 - INFO - Data quality report saved to advanced_engine/data/data_quality_report.parquet
+2025-08-06 21:33:56,262 - INFO - === DATA COLLECTION SUMMARY ===
+2025-08-06 21:33:56,262 - INFO - Total pairs processed: 20
+2025-08-06 21:33:56,263 - INFO - Average data completeness: 100.00%
+2025-08-06 21:33:56,263 - INFO - Best quality pair: EURUSD=X (100.00%)
+2025-08-06 21:33:56,263 - INFO - Lowest quality pair: AUDCHF=X (100.00%)
+2025-08-06 21:33:56,263 - INFO - === DATA COLLECTION COMPLETED SUCCESSFULLY ===
