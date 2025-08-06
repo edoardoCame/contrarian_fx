@@ -2,7 +2,6 @@ import pandas as pd
 import yfinance as yf
 import os
 from strategy_contrarian import strategy, rebalance_risk_parity
-import pickle
 import warnings
 warnings.filterwarnings('ignore')
 
@@ -14,21 +13,19 @@ def download_and_save_data(tickers, start_date='2010-01-01', end_date='2025-12-3
     data_dict = {}
     
     for ticker in tickers:
-        file_path = os.path.join(data_dir, f"{ticker.replace('=', '_')}.pkl")
+        file_path = os.path.join(data_dir, f"{ticker.replace('=', '_')}.parquet")
         
         # Check if data already exists
         if os.path.exists(file_path):
             print(f"Loading cached data for {ticker}")
-            with open(file_path, 'rb') as f:
-                data = pickle.load(f)
+            data = pd.read_parquet(file_path)
         else:
             print(f"Downloading {ticker}...")
             try:
                 data = yf.download(ticker, start=start_date, end=end_date, auto_adjust=False)
                 if not data.empty:
                     # Save to disk
-                    with open(file_path, 'wb') as f:
-                        pickle.dump(data, f)
+                    data.to_parquet(file_path)
                     print(f"Downloaded and saved {ticker}")
                 else:
                     print(f"No data available for {ticker}")
@@ -77,14 +74,33 @@ def batch_backtest_contrarian(data_dict, results_dir='data/backtest_results'):
             print(f"Error processing {ticker}: {e}")
     
     # Save all equity curves
-    equity_curves_file = os.path.join(results_dir, 'all_equity_curves.pkl')
-    with open(equity_curves_file, 'wb') as f:
-        pickle.dump(equity_curves, f)
+    equity_curves_file = os.path.join(results_dir, 'all_equity_curves.parquet')
+    equity_curves.to_parquet(equity_curves_file)
     
-    # Save individual results  
-    results_file = os.path.join(results_dir, 'individual_results.pkl')
-    with open(results_file, 'wb') as f:
-        pickle.dump(individual_results, f)
+    # Save individual results as separate parquet files 
+    results_dir_individual = os.path.join(results_dir, 'individual_results')
+    os.makedirs(results_dir_individual, exist_ok=True)
+    
+    # Create a summary dataframe for individual results
+    summary_data = []
+    for ticker, result in individual_results.items():
+        # Save individual equity and returns as parquet
+        result['equity'].to_frame(name='equity').to_parquet(
+            os.path.join(results_dir_individual, f"{ticker.replace('=', '_')}_equity.parquet")
+        )
+        result['strategy_returns'].to_frame(name='strategy_returns').to_parquet(
+            os.path.join(results_dir_individual, f"{ticker.replace('=', '_')}_returns.parquet")
+        )
+        
+        # Add to summary
+        summary_data.append({
+            'ticker': ticker,
+            'final_return': result['final_return']
+        })
+    
+    # Save summary
+    summary_df = pd.DataFrame(summary_data)
+    summary_df.to_parquet(os.path.join(results_dir, 'individual_results_summary.parquet'), index=False)
     
     print(f"Saved equity curves for {len(equity_curves.columns)} pairs")
     return equity_curves, individual_results
@@ -117,9 +133,8 @@ def create_risk_parity_portfolio(equity_curves, n=22, threshold=-0.1, shift=1):
     portfolio_df = rebalance_risk_parity(strategy_prices, n=n, threshold=threshold, shift=shift)
     
     # Save portfolio results
-    portfolio_file = os.path.join('data/backtest_results', 'risk_parity_portfolio.pkl')
-    with open(portfolio_file, 'wb') as f:
-        pickle.dump(portfolio_df, f)
+    portfolio_file = os.path.join('data/backtest_results', 'risk_parity_portfolio.parquet')
+    portfolio_df.to_parquet(portfolio_file)
     
     print(f"Risk parity portfolio created - Final equity: {portfolio_df['equity'].iloc[-1]:.4f}")
     return portfolio_df
