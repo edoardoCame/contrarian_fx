@@ -375,13 +375,13 @@ class RiskParityOptimizer:
             # Fall back to inverse volatility
             return self._inverse_volatility_weights(volatility)
         
-        # Filter correlation matrix to selected assets
-        asset_indices = np.where(selected_assets)[0]
-        if len(asset_indices) != len(volatility):
+        # The correlation matrix is already calculated for selected assets only,
+        # so we don't need to filter it again. Just verify dimensions match.
+        if correlation_matrix.shape[0] != len(volatility) or correlation_matrix.shape[1] != len(volatility):
             # Correlation matrix size mismatch, fall back to inverse volatility
             return self._inverse_volatility_weights(volatility)
         
-        filtered_corr = correlation_matrix[np.ix_(asset_indices, asset_indices)]
+        filtered_corr = correlation_matrix
         vol_array = volatility.values
         
         # Create covariance matrix
@@ -457,8 +457,14 @@ class RiskParityOptimizer:
             return scaled_weights / scaled_weights.sum()
         
         # Similar to ERC but with custom risk budgets
-        asset_indices = np.where(selected_assets)[0]
-        filtered_corr = correlation_matrix[np.ix_(asset_indices, asset_indices)]
+        # The correlation matrix is already calculated for selected assets only
+        if correlation_matrix.shape[0] != n or correlation_matrix.shape[1] != n:
+            # Correlation matrix size mismatch, fall back to scaled inverse volatility
+            inv_vol_weights = self._inverse_volatility_weights(volatility)
+            scaled_weights = inv_vol_weights * risk_budget
+            return scaled_weights / scaled_weights.sum()
+        
+        filtered_corr = correlation_matrix
         vol_array = volatility.values
         cov_matrix = np.outer(vol_array, vol_array) * filtered_corr
         
@@ -1002,13 +1008,23 @@ class PortfolioManager:
             # Simple volatility scaling using weighted average volatility
             portfolio_vol = (weights.abs() * volatility).sum()
         else:
-            # Use full covariance matrix for accurate portfolio volatility
-            vol_array = volatility[weights.index].fillna(volatility.median()).values
-            weight_array = weights.values
+            # Use covariance matrix for accurate portfolio volatility
+            # Note: correlation_matrix is only for assets with non-zero weights
+            active_weights = weights[weights.abs() > 1e-6]  # Get non-zero weights
             
-            # Create covariance matrix
-            cov_matrix = np.outer(vol_array, vol_array) * correlation_matrix
-            portfolio_vol = calculate_portfolio_risk_numba(weight_array, cov_matrix)
+            if len(active_weights) == 0:
+                portfolio_vol = 0.0
+            elif len(active_weights) != correlation_matrix.shape[0]:
+                # Correlation matrix size doesn't match active weights, fallback to simple method
+                portfolio_vol = (weights.abs() * volatility).sum()
+            else:
+                # Extract volatilities for active assets only
+                active_vol = volatility[active_weights.index].fillna(volatility.median()).values
+                active_weight_array = active_weights.values
+                
+                # Create covariance matrix for active assets only
+                cov_matrix = np.outer(active_vol, active_vol) * correlation_matrix
+                portfolio_vol = calculate_portfolio_risk_numba(active_weight_array, cov_matrix)
         
         if portfolio_vol > 0 and self.target_volatility is not None:
             scaling_factor = self.target_volatility / portfolio_vol
