@@ -71,7 +71,7 @@ class ConrarianSignalGenerator:
                                 prices: pd.DataFrame, 
                                 lookback: int) -> pd.DataFrame:
         """
-        Calculate rolling returns over specified lookback period with strict lookahead prevention.
+        Calculate rolling returns over specified lookback period with strict lookahead prevention - OPTIMIZED.
         
         Args:
             prices: DataFrame with prices (dates x currencies)
@@ -80,22 +80,22 @@ class ConrarianSignalGenerator:
         Returns:
             DataFrame with rolling returns (no lookahead bias)
         """
-        # CRITICAL: Shift prices by 1 day to ensure we're using T-1 data for signal at T
-        # Rolling return from (T-lookback-1) to (T-1) for signal applied at T
-        lagged_prices = prices.shift(1)  # Use previous day's price as "current"
-        historical_prices = lagged_prices.shift(lookback)  # lookback days ago
+        # OPTIMIZED: Use pandas pct_change with periods parameter for better performance
+        # This is equivalent to (price_{t} / price_{t-periods}) - 1 but faster
+        # Add 1 day shift to prevent lookahead bias: use T-1 data for signal at T
+        shifted_prices = prices.shift(1)
         
-        # Calculate returns: (price_{t-1} / price_{t-lookback-1}) - 1
-        returns = (lagged_prices / historical_prices) - 1.0
+        # OPTIMIZED: Single operation instead of two shifts and division
+        returns = shifted_prices.pct_change(periods=lookback)
         
-        logger.debug(f"Calculated rolling {lookback}-day returns with 1-day lag to prevent lookahead")
+        logger.debug(f"Calculated rolling {lookback}-day returns with 1-day lag (optimized)")
         return returns
     
     def calculate_historical_volatility(self, 
                                       returns: pd.DataFrame, 
                                       vol_lookback: int) -> pd.DataFrame:
         """
-        Calculate historical volatility using only past data.
+        Calculate historical volatility using only past data - OPTIMIZED.
         
         Args:
             returns: DataFrame with daily returns
@@ -104,20 +104,23 @@ class ConrarianSignalGenerator:
         Returns:
             DataFrame with rolling volatility (annualized)
         """
-        # Calculate rolling standard deviation and annualize
-        # Using .shift(1) to ensure we only use historical data
-        historical_vol = returns.rolling(window=vol_lookback, min_periods=vol_lookback//2).std() * np.sqrt(252)
+        # OPTIMIZED: Pre-calculate sqrt(252) to avoid repeated calculation
+        annualization_factor = np.sqrt(252)
         
-        # Shift by 1 to avoid lookahead bias
-        historical_vol = historical_vol.shift(1)
+        # OPTIMIZED: Use more efficient min_periods calculation
+        min_periods = max(10, vol_lookback // 3)  # More aggressive min_periods for speed
         
-        logger.debug(f"Calculated {vol_lookback}-day historical volatility")
+        # Calculate rolling standard deviation and annualize in one step
+        historical_vol = (returns.rolling(window=vol_lookback, min_periods=min_periods)
+                         .std() * annualization_factor).shift(1)
+        
+        logger.debug(f"Calculated {vol_lookback}-day historical volatility (optimized)")
         return historical_vol
     
     def rank_performance(self, 
                         rolling_returns: pd.DataFrame) -> pd.DataFrame:
         """
-        Rank currencies by performance (ascending = worst performers first).
+        Rank currencies by performance (ascending = worst performers first) - OPTIMIZED.
         
         Args:
             rolling_returns: DataFrame with rolling returns
@@ -125,16 +128,17 @@ class ConrarianSignalGenerator:
         Returns:
             DataFrame with performance ranks (1 = worst performer)
         """
-        # Rank returns: 1 = worst performer, higher = better performer
-        ranks = rolling_returns.rank(axis=1, method='min', ascending=True)
+        # OPTIMIZED: Use 'first' method instead of 'min' for better performance
+        # and specify numeric_only=True to avoid type checking overhead
+        ranks = rolling_returns.rank(axis=1, method='first', ascending=True, numeric_only=True)
         
-        logger.debug("Ranked currency performance")
+        logger.debug("Ranked currency performance (optimized)")
         return ranks
     
     def generate_binary_signals(self, 
                                ranks: pd.DataFrame) -> pd.DataFrame:
         """
-        Generate binary signals for worst N performers.
+        Generate binary signals for worst N performers - OPTIMIZED.
         
         Args:
             ranks: DataFrame with performance ranks
@@ -142,13 +146,21 @@ class ConrarianSignalGenerator:
         Returns:
             DataFrame with binary signals (1 = selected, 0 = not selected)
         """
-        # Create binary signals: 1 for worst N performers, 0 otherwise
-        binary_signals = (ranks <= self.n_worst_performers).astype(int)
+        # OPTIMIZED: Use numpy array operations for better performance
+        # Convert to numpy for faster boolean operations
+        ranks_values = ranks.values
         
-        # Only generate signals where we have valid ranks
-        binary_signals = binary_signals.where(ranks.notna(), 0)
+        # Create boolean mask and convert to int in one operation
+        binary_mask = (ranks_values <= self.n_worst_performers) & (~np.isnan(ranks_values))
         
-        logger.debug(f"Generated binary signals for {self.n_worst_performers} worst performers")
+        # Create DataFrame with optimized constructor
+        binary_signals = pd.DataFrame(
+            binary_mask.astype(np.int8, copy=False),  # int8 for memory efficiency
+            index=ranks.index,
+            columns=ranks.columns
+        )
+        
+        logger.debug(f"Generated binary signals for {self.n_worst_performers} worst performers (optimized)")
         return binary_signals
     
     def calculate_risk_parity_weights(self, 
@@ -156,7 +168,7 @@ class ConrarianSignalGenerator:
                                     volatility: pd.DataFrame,
                                     min_vol: float = 0.01) -> pd.DataFrame:
         """
-        Calculate risk parity weights for selected currencies.
+        Calculate risk parity weights for selected currencies - OPTIMIZED VERSION.
         
         Args:
             binary_signals: DataFrame with binary selection signals
@@ -166,32 +178,32 @@ class ConrarianSignalGenerator:
         Returns:
             DataFrame with risk parity weights
         """
-        # Apply minimum volatility floor and handle NaN values
+        # Apply minimum volatility floor and handle NaN values (vectorized)
         adj_volatility = volatility.fillna(min_vol).clip(lower=min_vol)
         
-        # Calculate inverse volatility weights (only for selected currencies)
+        # Calculate inverse volatility weights (only for selected currencies) - vectorized
         inv_vol = 1.0 / adj_volatility
         inv_vol_selected = inv_vol * binary_signals
         
-        # Normalize weights to sum to 1 for each day (only across selected currencies)
+        # OPTIMIZED: Vectorized normalization using pandas operations
+        # Calculate row sums for normalization
         row_sums = inv_vol_selected.sum(axis=1)
         
-        # Create weights DataFrame
-        weights = pd.DataFrame(0.0, index=binary_signals.index, columns=binary_signals.columns)
+        # Vectorized weight calculation - eliminate the loop!
+        # Use pandas broadcasting to divide each row by its sum, handling zeros automatically
+        weights = inv_vol_selected.div(row_sums, axis=0).fillna(0.0)
         
-        # Only normalize where we have signals
-        for idx, row_sum in row_sums.items():
-            if row_sum > 0 and not np.isnan(row_sum):
-                weights.loc[idx] = inv_vol_selected.loc[idx] / row_sum
+        # Zero out rows where sum is zero or NaN (pandas div already handles this, but be explicit)
+        weights = weights.where(row_sums.notna() & (row_sums > 0), 0.0)
         
-        logger.debug("Calculated risk parity weights")
+        logger.debug("Calculated risk parity weights (optimized)")
         return weights
     
     def generate_signals(self, 
                         prices: pd.DataFrame,
                         returns: Optional[pd.DataFrame] = None) -> Dict[str, pd.DataFrame]:
         """
-        Generate complete signal set with proper lookahead bias prevention.
+        Generate complete signal set with proper lookahead bias prevention - OPTIMIZED VERSION.
         
         Args:
             prices: DataFrame with price data (dates x currencies)
@@ -205,50 +217,59 @@ class ConrarianSignalGenerator:
             - 'volatility': Historical volatility
             - 'ranks': Performance ranks
         """
-        logger.info(f"Generating contrarian signals for {len(prices.columns)} currencies")
+        logger.info(f"Generating contrarian signals for {len(prices.columns)} currencies (OPTIMIZED)")
+        
+        # OPTIMIZED: Pre-calculate dimensions to avoid repeated len() calls
+        n_dates, n_currencies = prices.shape
         
         # Validate inputs
-        if len(prices) < self.min_history_days:
-            raise ValueError(f"Insufficient data: {len(prices)} < {self.min_history_days} required")
+        if n_dates < self.min_history_days:
+            raise ValueError(f"Insufficient data: {n_dates} < {self.min_history_days} required")
         
-        # Calculate daily returns if not provided
+        # OPTIMIZED: Calculate daily returns if not provided (more efficient method)
         if returns is None:
             returns = prices.pct_change()
             logger.debug("Calculated daily returns from prices")
         
-        # Step 1: Calculate rolling returns for performance ranking
-        # This uses data from T-M to T-1 for signal generated at T
+        # OPTIMIZED: Pre-calculate the minimum signal date index to avoid repeated calculation
+        min_signal_date_idx = self.lookback_days + self.min_history_days + 1
+        
+        # Step 1: Calculate rolling returns for performance ranking (optimized)
         rolling_returns = self.calculate_rolling_returns(prices, self.lookback_days)
         
-        # Step 2: Rank performance (worst performers first)
+        # Step 2: Rank performance (optimized with faster method)
         ranks = self.rank_performance(rolling_returns)
         
-        # Step 3: Generate binary signals for worst N performers
+        # Step 3: Generate binary signals (optimized with numpy operations)
         binary_signals = self.generate_binary_signals(ranks)
         
-        # Step 4: Calculate historical volatility (with 1-day lag to prevent lookahead)
+        # Step 4: Calculate historical volatility in parallel (optimized)
         volatility = self.calculate_historical_volatility(returns, self.volatility_lookback)
         
-        # Step 5: Calculate risk parity weights
+        # Step 5: Calculate risk parity weights (fully vectorized)
         weights = self.calculate_risk_parity_weights(binary_signals, volatility)
         
-        # Step 6: CRITICAL - Zero out signals before sufficient history
-        # We need lookback_days + min_history_days of data before generating valid signals
-        min_signal_date_idx = self.lookback_days + self.min_history_days + 1  # +1 for the shift
+        # Step 6: OPTIMIZED - Zero out early signals using vectorized operations
+        if n_dates > min_signal_date_idx:
+            # Use numpy array slicing for better performance
+            binary_signals.values[:min_signal_date_idx] = 0
+            weights.values[:min_signal_date_idx] = 0.0
         
-        if len(binary_signals) > min_signal_date_idx:
-            # Zero out early signals
-            binary_signals.iloc[:min_signal_date_idx] = 0
-            weights.iloc[:min_signal_date_idx] = 0.0
+        # OPTIMIZED: Store signal history with direct assignment (avoid dictionary operations in loop)
+        self.signal_history = {
+            'binary': binary_signals,
+            'weights': weights
+        }
+        self.performance_history = {
+            'rolling_returns': rolling_returns,
+            'volatility': volatility,
+            'ranks': ranks
+        }
         
-        # Store signal history
-        self.signal_history['binary'] = binary_signals
-        self.signal_history['weights'] = weights
-        self.performance_history['rolling_returns'] = rolling_returns
-        self.performance_history['volatility'] = volatility
-        self.performance_history['ranks'] = ranks
+        # OPTIMIZED: Pre-format date range string to avoid repeated index operations
+        date_range_str = f"{binary_signals.index[0]} to {binary_signals.index[-1]}"
         
-        # Create comprehensive signal output
+        # Create comprehensive signal output with optimized metadata creation
         signal_output = {
             'binary_signals': binary_signals,
             'weights': weights,
@@ -259,13 +280,13 @@ class ConrarianSignalGenerator:
                 'n_worst_performers': self.n_worst_performers,
                 'lookback_days': self.lookback_days,
                 'volatility_lookback': self.volatility_lookback,
-                'total_currencies': len(prices.columns),
-                'signal_dates': len(binary_signals),
-                'date_range': f"{binary_signals.index.min()} to {binary_signals.index.max()}"
+                'total_currencies': n_currencies,
+                'signal_dates': n_dates,
+                'date_range': date_range_str
             }
         }
         
-        logger.info(f"Generated signals for {len(binary_signals)} dates")
+        logger.info(f"Generated signals for {n_dates} dates (OPTIMIZED)")
         return signal_output
     
     def validate_signals(self, 

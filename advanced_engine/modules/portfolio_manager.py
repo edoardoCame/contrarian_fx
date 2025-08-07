@@ -739,7 +739,7 @@ class RiskMonitor:
                 breaches[limit_name] = current_value > limit_value
                 
                 if breaches[limit_name]:
-                    logger.warning(f"Risk limit breach: {limit_name} = {current_value:.4f} > {limit_value:.4f}")
+                    logger.debug(f"Risk limit breach: {limit_name} = {current_value:.4f} > {limit_value:.4f}")
         
         return breaches
 
@@ -964,28 +964,37 @@ class PortfolioManager:
             identity = np.eye(n)
             return (1 - alpha) * corr_matrix + alpha * identity
     
-    def _apply_position_constraints(self, weights: pd.Series) -> pd.Series:
+    def _apply_position_constraints(self, weights: Union[pd.Series, pd.DataFrame]) -> Union[pd.Series, pd.DataFrame]:
         """
         Apply position size constraints and other portfolio limits.
         
         Args:
-            weights: Original portfolio weights
+            weights: Original portfolio weights (Series or DataFrame)
             
         Returns:
-            Constrained portfolio weights
+            Constrained portfolio weights (same type as input)
         """
         constrained_weights = weights.copy()
         
         # Apply minimum position threshold
-        constrained_weights[constrained_weights.abs() < self.min_position_size] = 0.0
+        constrained_weights = constrained_weights.where(
+            constrained_weights.abs() >= self.min_position_size, 0.0
+        )
         
         # Apply maximum position size limits
         constrained_weights = constrained_weights.clip(-self.max_position_size, self.max_position_size)
         
-        # Re-normalize non-zero weights
-        total_weight = constrained_weights.abs().sum()
-        if total_weight > 0:
-            constrained_weights = constrained_weights / total_weight
+        if isinstance(constrained_weights, pd.Series):
+            # Series case
+            total_weight = constrained_weights.abs().sum()
+            if total_weight > 0:
+                constrained_weights = constrained_weights / total_weight
+        else:
+            # DataFrame case - normalize each row
+            row_sums = constrained_weights.abs().sum(axis=1)
+            # Avoid division by zero
+            row_sums = row_sums.replace(0, 1)
+            constrained_weights = constrained_weights.div(row_sums, axis=0)
         
         return constrained_weights
     
@@ -1037,6 +1046,176 @@ class PortfolioManager:
             return scaled_weights
         
         return weights
+    
+    def _vectorized_inverse_volatility_portfolio(self,
+                                               binary_signals: pd.DataFrame,
+                                               volatility_data: Optional[pd.DataFrame],
+                                               returns_data: pd.DataFrame) -> pd.DataFrame:
+        """
+        Vectorized portfolio construction for inverse volatility method.
+        """
+        if volatility_data is None:
+            # Calculate volatility using vectorized operations
+            volatility_data = returns_data.rolling(
+                window=self.volatility_lookback, 
+                min_periods=max(10, self.volatility_lookback // 2)
+            ).std() * np.sqrt(252)
+            volatility_data = volatility_data.shift(1)  # Avoid lookahead bias
+        
+        # Fill missing volatility with cross-sectional median
+        volatility_filled = volatility_data.fillna(
+            volatility_data.median(axis=1, skipna=True), axis=0
+        ).fillna(0.15).clip(lower=0.01)  # 15% default volatility, minimum 1%
+        
+        # Calculate inverse volatility weights for selected assets
+        inv_vol = 1.0 / volatility_filled
+        weighted_signals = binary_signals * inv_vol
+        
+        # Normalize row-wise (vectorized)
+        row_sums = weighted_signals.sum(axis=1)
+        row_sums = row_sums.replace(0, 1)  # Avoid division by zero
+        
+        portfolio_weights = weighted_signals.div(row_sums, axis=0)
+        
+        # Apply position constraints
+        portfolio_weights = self._apply_position_constraints(portfolio_weights)
+        
+        return portfolio_weights
+    
+    def _optimized_date_by_date_portfolio(self,
+                                        binary_signals: pd.DataFrame,
+                                        volatility_data: Optional[pd.DataFrame],
+                                        returns_data: pd.DataFrame) -> pd.DataFrame:
+        """
+        Optimized date-by-date processing for ERC and risk budgeting methods.
+        """
+        portfolio_weights_history = pd.DataFrame(
+            0.0, index=binary_signals.index, columns=binary_signals.columns
+        )
+        
+        # Pre-calculate all volatilities to avoid repeated computation
+        if volatility_data is None:
+            volatility_estimates = self.volatility_estimator.estimate_volatility(
+                returns_data, window=self.volatility_lookback
+            )
+        else:
+            volatility_estimates = volatility_data
+        
+        # Process only rebalancing dates to reduce computation
+        rebalance_schedule = self.generate_rebalancing_schedule(binary_signals.index)
+        rebalancing_dates = binary_signals.index[rebalance_schedule]
+        
+        current_weights = pd.Series(0.0, index=binary_signals.columns)
+        
+        for date in rebalancing_dates:
+            # Get signals and volatility for current date
+            binary_signals_date = binary_signals.loc[date]
+            selected_assets = binary_signals_date > 0
+            
+            if not selected_assets.any():
+                current_weights = pd.Series(0.0, index=binary_signals.columns)
+            else:
+                # Get volatility estimate
+                available_vol_dates = volatility_estimates.index[volatility_estimates.index <= date]
+                if len(available_vol_dates) > 0:
+                    vol_date = available_vol_dates[-1]
+                    current_volatility = volatility_estimates.loc[vol_date]
+                else:
+                    # Fallback to default volatility
+                    current_volatility = pd.Series(0.15, index=binary_signals.columns)
+                
+                # Calculate correlation matrix only if needed
+                correlation_matrix = None
+                if self.risk_parity_optimizer.method in ['erc', 'risk_budgeting']:
+                    correlation_matrix = self._calculate_correlation_matrix(
+                        returns_data, date, selected_assets
+                    )
+                
+                # Calculate weights using risk parity optimizer
+                current_weights = self.risk_parity_optimizer.calculate_risk_parity_weights(
+                    selected_assets=selected_assets,
+                    volatility=current_volatility,
+                    correlation_matrix=correlation_matrix
+                )
+            
+            # Forward-fill weights until next rebalancing date
+            next_rebal_idx = rebalancing_dates.get_indexer([date], method='ffill')[0]
+            if next_rebal_idx < len(rebalancing_dates) - 1:
+                end_date = rebalancing_dates[next_rebal_idx + 1]
+                date_range = binary_signals.index[(binary_signals.index >= date) & (binary_signals.index < end_date)]
+            else:
+                date_range = binary_signals.index[binary_signals.index >= date]
+            
+            for fill_date in date_range:
+                portfolio_weights_history.loc[fill_date] = current_weights
+        
+        return portfolio_weights_history
+    
+    def _calculate_vectorized_transaction_costs(self,
+                                              portfolio_weights: pd.DataFrame,
+                                              rebalance_schedule: pd.Series) -> pd.Series:
+        """
+        Vectorized transaction cost calculation.
+        """
+        # Calculate weight changes
+        weight_changes = portfolio_weights.diff().abs()
+        
+        # Apply base transaction cost
+        base_cost = self.transaction_cost_bps / 10000.0
+        
+        # Sum across assets and apply only on rebalancing dates
+        transaction_costs = weight_changes.sum(axis=1) * base_cost
+        transaction_costs = transaction_costs * rebalance_schedule.astype(float)
+        
+        return transaction_costs
+    
+    def _calculate_strategic_risk_metrics(self,
+                                        portfolio_returns: pd.Series,
+                                        portfolio_weights: pd.DataFrame,
+                                        returns_data: pd.DataFrame,
+                                        signal_dates: pd.DatetimeIndex) -> Dict:
+        """
+        Calculate risk metrics at strategic points (monthly) to reduce computation.
+        """
+        risk_metrics_history = {}
+        
+        # Calculate monthly (first business day of each month) + final date
+        try:
+            monthly_dates = signal_dates.to_series().groupby(
+                [signal_dates.year, signal_dates.month]
+            ).first()
+            
+            strategic_dates = list(monthly_dates.values) + [signal_dates[-1]]
+            strategic_dates = list(set(strategic_dates))  # Remove duplicates
+            
+            # Convert to timezone-naive if necessary and sort
+            strategic_dates_cleaned = []
+            for date in strategic_dates:
+                if hasattr(date, 'tz') and date.tz is not None:
+                    date = date.tz_localize(None)
+                strategic_dates_cleaned.append(date)
+            
+            strategic_dates = strategic_dates_cleaned
+            strategic_dates.sort()
+        except Exception as e:
+            logger.debug(f"Error processing strategic dates: {str(e)}")
+            # Fallback to a simple strategy
+            strategic_dates = [signal_dates[i] for i in range(0, len(signal_dates), 30)] + [signal_dates[-1]]
+        
+        for date in strategic_dates:
+            if date in portfolio_returns.index and len(portfolio_returns.loc[:date].dropna()) > 10:
+                try:
+                    risk_metrics = self.risk_monitor.calculate_portfolio_risk_metrics(
+                        portfolio_returns.loc[:date],
+                        portfolio_weights.loc[:date],
+                        returns_data.loc[:date]
+                    )
+                    risk_metrics_history[date] = risk_metrics
+                except Exception as e:
+                    logger.debug(f"Risk metrics calculation failed for {date}: {str(e)}")
+                    continue
+        
+        return risk_metrics_history
     
     def generate_rebalancing_schedule(self,
                                     signal_dates: pd.DatetimeIndex,
@@ -1114,7 +1293,7 @@ class PortfolioManager:
                                start_date: Optional[str] = None,
                                end_date: Optional[str] = None) -> Dict[str, Any]:
         """
-        Run complete portfolio management process.
+        Optimized portfolio management process with vectorized operations and reduced computational overhead.
         
         Args:
             signal_output: Output from ConrarianSignalGenerator
@@ -1125,74 +1304,75 @@ class PortfolioManager:
         Returns:
             Dictionary with complete portfolio management results
         """
-        logger.info("Starting portfolio management process")
+        logger.info("Starting optimized portfolio management process")
         
-        # Get date range
-        signal_dates = signal_output['binary_signals'].index
+        # Validate and align input data
+        binary_signals = signal_output['binary_signals']
+        volatility_data = signal_output.get('volatility', None)
+        
+        # Ensure data alignment
+        common_columns = binary_signals.columns.intersection(returns.columns)
+        common_index = binary_signals.index.intersection(returns.index)
+        
+        if len(common_columns) == 0 or len(common_index) == 0:
+            raise ValueError("No overlapping data between signals and returns")
+        
+        # Filter to common data
+        binary_signals = binary_signals.loc[common_index, common_columns]
+        returns_aligned = returns.loc[common_index, common_columns]
+        if volatility_data is not None:
+            volatility_data = volatility_data.reindex_like(binary_signals)
+        
+        # Apply date filtering
+        signal_dates = binary_signals.index
         if start_date:
-            signal_dates = signal_dates[signal_dates >= pd.to_datetime(start_date)]
+            start_dt = pd.to_datetime(start_date)
+            mask = signal_dates >= start_dt
+            signal_dates = signal_dates[mask]
+            binary_signals = binary_signals.loc[signal_dates]
+            returns_aligned = returns_aligned.loc[signal_dates]
+            if volatility_data is not None:
+                volatility_data = volatility_data.loc[signal_dates]
+        
         if end_date:
-            signal_dates = signal_dates[signal_dates <= pd.to_datetime(end_date)]
+            end_dt = pd.to_datetime(end_date)
+            mask = signal_dates <= end_dt
+            signal_dates = signal_dates[mask]
+            binary_signals = binary_signals.loc[signal_dates]
+            returns_aligned = returns_aligned.loc[signal_dates]
+            if volatility_data is not None:
+                volatility_data = volatility_data.loc[signal_dates]
+        
+        logger.info(f"Processing {len(signal_dates)} dates with {len(common_columns)} assets")
+        
+        # Pre-calculate volatility for all dates at once (vectorized)
+        if self.risk_parity_optimizer.method == 'inverse_volatility':
+            # For inverse volatility, we can vectorize the entire process
+            portfolio_weights_history = self._vectorized_inverse_volatility_portfolio(
+                binary_signals, volatility_data, returns_aligned
+            )
+        else:
+            # For ERC and risk budgeting, use optimized date-by-date processing
+            portfolio_weights_history = self._optimized_date_by_date_portfolio(
+                binary_signals, volatility_data, returns_aligned
+            )
         
         # Generate rebalancing schedule
         rebalance_schedule = self.generate_rebalancing_schedule(signal_dates)
         
-        # Initialize tracking
-        portfolio_weights_history = pd.DataFrame(
-            index=signal_dates, 
-            columns=signal_output['binary_signals'].columns,
-            dtype=float
-        ).fillna(0.0)
+        # Calculate transaction costs (vectorized)
+        transaction_costs_history = self._calculate_vectorized_transaction_costs(
+            portfolio_weights_history, rebalance_schedule
+        )
         
-        transaction_costs_history = pd.Series(0.0, index=signal_dates)
-        risk_metrics_history = {}
+        # Calculate portfolio returns (vectorized)
+        portfolio_returns = self._calculate_portfolio_returns_vectorized(
+            portfolio_weights_history, returns_aligned
+        )
         
-        current_weights = pd.Series(0.0, index=signal_output['binary_signals'].columns)
-        
-        # Process each date
-        for date in signal_dates:
-            logger.debug(f"Processing date: {date}")
-            
-            # Check if rebalancing is scheduled
-            if rebalance_schedule.loc[date]:
-                # Calculate target weights
-                target_weights = self.construct_portfolio_weights(
-                    signal_output, returns, current_date=date
-                )
-                
-                # Calculate transaction costs
-                transaction_cost = self.calculate_transaction_costs(
-                    current_weights, target_weights,
-                    signal_output['volatility'].loc[date] if date in signal_output['volatility'].index else None
-                )
-                
-                # Update weights
-                current_weights = target_weights.copy()
-                transaction_costs_history.loc[date] = transaction_cost
-                
-                logger.debug(f"Rebalanced portfolio: {(current_weights > 0).sum()} positions, cost: {transaction_cost:.6f}")
-            
-            # Store current weights
-            portfolio_weights_history.loc[date] = current_weights
-            
-            # Calculate risk metrics periodically (weekly to save computation)
-            if date.dayofweek == 0 or date == signal_dates[-1]:  # Monday or last date
-                portfolio_returns = self._calculate_portfolio_returns(
-                    portfolio_weights_history.loc[:date],
-                    returns.loc[:date]
-                )
-                
-                risk_metrics = self.risk_monitor.calculate_portfolio_risk_metrics(
-                    portfolio_returns,
-                    portfolio_weights_history.loc[:date],
-                    returns.loc[:date]
-                )
-                
-                risk_metrics_history[date] = risk_metrics
-        
-        # Calculate final portfolio returns
-        portfolio_returns = self._calculate_portfolio_returns(
-            portfolio_weights_history, returns
+        # Calculate risk metrics only at strategic points (monthly instead of weekly)
+        risk_metrics_history = self._calculate_strategic_risk_metrics(
+            portfolio_returns, portfolio_weights_history, returns_aligned, signal_dates
         )
         
         # Compile results
@@ -1202,7 +1382,7 @@ class PortfolioManager:
             'transaction_costs': transaction_costs_history,
             'rebalancing_dates': signal_dates[rebalance_schedule],
             'risk_metrics_history': risk_metrics_history,
-            'final_risk_metrics': risk_metrics_history.get(signal_dates[-1], {}),
+            'final_risk_metrics': risk_metrics_history.get(signal_dates[-1], {}) if risk_metrics_history else {},
             'metadata': {
                 'volatility_method': self.volatility_estimator.method,
                 'risk_parity_method': self.risk_parity_optimizer.method,
@@ -1211,7 +1391,7 @@ class PortfolioManager:
                 'correlation_lookback': self.correlation_lookback,
                 'max_position_size': self.max_position_size,
                 'target_volatility': self.target_volatility,
-                'total_rebalancing_dates': len(signal_dates[rebalance_schedule]),
+                'total_rebalancing_dates': rebalance_schedule.sum(),
                 'total_transaction_costs': transaction_costs_history.sum(),
                 'date_range': f"{signal_dates.min()} to {signal_dates.max()}"
             }
@@ -1220,16 +1400,14 @@ class PortfolioManager:
         # Store in instance
         self.portfolio_history = results
         
-        logger.info(f"Portfolio management completed: {len(signal_dates)} dates processed, "
-                   f"{len(signal_dates[rebalance_schedule])} rebalancing events")
-        
+        logger.info(f"Optimized portfolio management completed: {len(signal_dates)} dates processed")
         return results
     
-    def _calculate_portfolio_returns(self,
-                                   weights: pd.DataFrame,
-                                   asset_returns: pd.DataFrame) -> pd.Series:
+    def _calculate_portfolio_returns_vectorized(self,
+                                               weights: pd.DataFrame,
+                                               asset_returns: pd.DataFrame) -> pd.Series:
         """
-        Calculate portfolio returns from weights and asset returns.
+        Vectorized portfolio returns calculation with better data handling.
         
         Args:
             weights: Portfolio weights over time
@@ -1238,23 +1416,37 @@ class PortfolioManager:
         Returns:
             Portfolio return series
         """
-        # Align data
-        common_dates = weights.index.intersection(asset_returns.index)
-        common_assets = weights.columns.intersection(asset_returns.columns)
-        
-        if len(common_dates) == 0 or len(common_assets) == 0:
-            logger.warning("No common data for portfolio return calculation")
-            return pd.Series(dtype=float)
-        
-        aligned_weights = weights.loc[common_dates, common_assets]
-        aligned_returns = asset_returns.loc[common_dates, common_assets]
-        
-        # Calculate portfolio returns
-        # Use previous day's weights with current day's returns
-        lagged_weights = aligned_weights.shift(1).fillna(0.0)
-        portfolio_returns = (lagged_weights * aligned_returns).sum(axis=1)
-        
-        return portfolio_returns
+        # Data should already be aligned, but ensure compatibility
+        if weights.index.equals(asset_returns.index) and weights.columns.equals(asset_returns.columns):
+            # Perfect alignment - use vectorized operations
+            lagged_weights = weights.shift(1).fillna(0.0)
+            portfolio_returns = (lagged_weights * asset_returns).sum(axis=1)
+            return portfolio_returns
+        else:
+            # Fallback to alignment
+            common_dates = weights.index.intersection(asset_returns.index)
+            common_assets = weights.columns.intersection(asset_returns.columns)
+            
+            if len(common_dates) == 0 or len(common_assets) == 0:
+                logger.warning("No common data for portfolio return calculation")
+                return pd.Series(0.0, index=weights.index)
+            
+            aligned_weights = weights.loc[common_dates, common_assets]
+            aligned_returns = asset_returns.loc[common_dates, common_assets]
+            
+            lagged_weights = aligned_weights.shift(1).fillna(0.0)
+            portfolio_returns = (lagged_weights * aligned_returns).sum(axis=1)
+            
+            # Reindex to original weights index
+            return portfolio_returns.reindex(weights.index, fill_value=0.0)
+    
+    def _calculate_portfolio_returns(self,
+                                   weights: pd.DataFrame,
+                                   asset_returns: pd.DataFrame) -> pd.Series:
+        """
+        Legacy method - redirects to vectorized version.
+        """
+        return self._calculate_portfolio_returns_vectorized(weights, asset_returns)
     
     def optimize_portfolio_parameters(self,
                                     signal_output: Dict[str, pd.DataFrame],

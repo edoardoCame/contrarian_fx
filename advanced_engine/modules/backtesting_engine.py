@@ -27,18 +27,19 @@ from datetime import datetime, timedelta
 import warnings
 from pathlib import Path
 import json
+import time
 
 warnings.filterwarnings('ignore')
 logger = logging.getLogger(__name__)
 
 
-@nb.jit(nopython=True, cache=True)
+@nb.jit(nopython=True, fastmath=True)
 def calculate_portfolio_returns_numba(weights: np.ndarray, 
                                     returns: np.ndarray,
                                     transaction_costs: np.ndarray,
                                     rebalance_mask: np.ndarray) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
     """
-    Numba-optimized portfolio return calculation with transaction costs.
+    Ultra-optimized portfolio return calculation with transaction costs.
     
     Args:
         weights: Portfolio weights (T x N)
@@ -50,38 +51,107 @@ def calculate_portfolio_returns_numba(weights: np.ndarray,
         Tuple of (portfolio_returns, transaction_costs_paid, turnover)
     """
     T, N = weights.shape
-    portfolio_returns = np.zeros(T)
-    transaction_costs_paid = np.zeros(T)
-    turnover = np.zeros(T)
+    portfolio_returns = np.zeros(T, dtype=np.float64)
+    transaction_costs_paid = np.zeros(T, dtype=np.float64)
+    turnover = np.zeros(T, dtype=np.float64)
     
     # Initialize with zero weights
-    prev_weights = np.zeros(N)
+    prev_weights = np.zeros(N, dtype=np.float64)
+    weight_changes = np.zeros(N, dtype=np.float64)
     
     for t in range(T):
         if rebalance_mask[t]:
-            # Calculate weight changes
-            weight_changes = np.abs(weights[t] - prev_weights)
-            turnover[t] = np.sum(weight_changes)
+            # Calculate weight changes (vectorized abs diff)
+            for i in range(N):
+                weight_changes[i] = abs(weights[t, i] - prev_weights[i])
             
-            # Calculate transaction costs
-            transaction_costs_paid[t] = np.sum(weight_changes * transaction_costs[t])
+            # Sum turnover and transaction costs in single pass
+            turnover_sum = 0.0
+            tcost_sum = 0.0
+            for i in range(N):
+                change = weight_changes[i]
+                turnover_sum += change
+                tcost_sum += change * transaction_costs[t, i]
+            
+            turnover[t] = turnover_sum
+            transaction_costs_paid[t] = tcost_sum
             
             # Update weights
-            prev_weights = weights[t].copy()
+            for i in range(N):
+                prev_weights[i] = weights[t, i]
         
-        # Calculate portfolio return
+        # Calculate portfolio return (vectorized dot product)
         if t > 0:  # Skip first period
-            gross_return = np.sum(prev_weights * returns[t])
-            net_return = gross_return - transaction_costs_paid[t]
-            portfolio_returns[t] = net_return
+            gross_return = 0.0
+            for i in range(N):
+                gross_return += prev_weights[i] * returns[t, i]
+            
+            portfolio_returns[t] = gross_return - transaction_costs_paid[t]
     
     return portfolio_returns, transaction_costs_paid, turnover
 
 
-@nb.jit(nopython=True, cache=True)
+@nb.jit(nopython=True, fastmath=True)
+def calculate_portfolio_returns_vectorized(weights: np.ndarray, 
+                                         returns: np.ndarray,
+                                         transaction_costs: np.ndarray,
+                                         rebalance_mask: np.ndarray) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """
+    Optimized portfolio return calculation - numba compatible.
+    
+    Args:
+        weights: Portfolio weights (T x N)
+        returns: Asset returns (T x N)
+        transaction_costs: Transaction cost rates (T x N)
+        rebalance_mask: Boolean mask for rebalancing days (T,)
+        
+    Returns:
+        Tuple of (portfolio_returns, transaction_costs_paid, turnover)
+    """
+    T, N = weights.shape
+    
+    # Pre-allocate all arrays with explicit dtypes
+    portfolio_returns = np.zeros(T, dtype=np.float64)
+    transaction_costs_paid = np.zeros(T, dtype=np.float64)
+    turnover = np.zeros(T, dtype=np.float64)
+    
+    # Track active portfolio weights
+    active_weights = np.zeros(N, dtype=np.float64)
+    prev_weights = np.zeros(N, dtype=np.float64)
+    
+    for t in range(T):
+        if rebalance_mask[t]:
+            # Calculate weight changes
+            turnover_sum = 0.0
+            tcost_sum = 0.0
+            
+            for i in range(N):
+                weight_change = abs(weights[t, i] - prev_weights[i])
+                turnover_sum += weight_change
+                tcost_sum += weight_change * transaction_costs[t, i]
+                
+                # Update active and previous weights
+                active_weights[i] = weights[t, i]
+                prev_weights[i] = weights[t, i]
+            
+            turnover[t] = turnover_sum
+            transaction_costs_paid[t] = tcost_sum
+        
+        # Calculate portfolio return
+        if t > 0:  # Skip first period
+            gross_return = 0.0
+            for i in range(N):
+                gross_return += active_weights[i] * returns[t, i]
+            
+            portfolio_returns[t] = gross_return - transaction_costs_paid[t]
+    
+    return portfolio_returns, transaction_costs_paid, turnover
+
+
+@nb.jit(nopython=True, fastmath=True)
 def calculate_drawdown_numba(cumulative_returns: np.ndarray) -> Tuple[np.ndarray, float, int, int]:
     """
-    Numba-optimized drawdown calculation.
+    Ultra-optimized drawdown calculation with improved performance.
     
     Args:
         cumulative_returns: Cumulative return series
@@ -90,40 +160,84 @@ def calculate_drawdown_numba(cumulative_returns: np.ndarray) -> Tuple[np.ndarray
         Tuple of (drawdown_series, max_drawdown, max_dd_start, max_dd_end)
     """
     n = len(cumulative_returns)
-    drawdowns = np.zeros(n)
-    peaks = np.zeros(n)
+    if n == 0:
+        return np.zeros(0, dtype=np.float64), 0.0, 0, 0
+        
+    drawdowns = np.zeros(n, dtype=np.float64)
     
     max_drawdown = 0.0
     max_dd_start = 0
     max_dd_end = 0
     
-    current_peak = cumulative_returns[0] if n > 0 else 0.0
-    peaks[0] = current_peak
+    current_peak = cumulative_returns[0]
+    current_peak_idx = 0
     
     for i in range(1, n):
-        # Update peak
+        # Update peak efficiently
         if cumulative_returns[i] > current_peak:
             current_peak = cumulative_returns[i]
-        peaks[i] = current_peak
+            current_peak_idx = i
         
-        # Calculate drawdown
-        if current_peak > 0:
-            drawdowns[i] = (cumulative_returns[i] - current_peak) / current_peak
-        else:
-            drawdowns[i] = 0.0
-        
-        # Track maximum drawdown
-        if drawdowns[i] < max_drawdown:
-            max_drawdown = drawdowns[i]
-            max_dd_end = i
+        # Calculate drawdown (avoid division by zero)
+        if current_peak > 1e-12:  # Small epsilon for numerical stability
+            drawdown = (cumulative_returns[i] - current_peak) / current_peak
+            drawdowns[i] = drawdown
             
-            # Find start of this drawdown period
-            for j in range(i, -1, -1):
-                if cumulative_returns[j] == current_peak:
-                    max_dd_start = j
-                    break
+            # Track maximum drawdown without expensive backward search
+            if drawdown < max_drawdown:
+                max_drawdown = drawdown
+                max_dd_start = current_peak_idx
+                max_dd_end = i
     
     return drawdowns, abs(max_drawdown), max_dd_start, max_dd_end
+
+
+@nb.jit(nopython=True, fastmath=True)
+def calculate_performance_metrics_numba(returns: np.ndarray, 
+                                       portfolio_value: np.ndarray) -> Tuple[float, float, float, float]:
+    """
+    Fast calculation of key performance metrics using numba.
+    
+    Args:
+        returns: Portfolio returns array
+        portfolio_value: Portfolio value series
+        
+    Returns:
+        Tuple of (total_return, annualized_return, volatility, sharpe_ratio)
+    """
+    if len(returns) <= 1:
+        return 0.0, 0.0, 0.0, 0.0
+    
+    # Remove first day (initialization)
+    clean_returns = returns[1:]
+    n_days = len(clean_returns)
+    
+    if n_days == 0:
+        return 0.0, 0.0, 0.0, 0.0
+    
+    # Total return
+    total_return = portfolio_value[-1] / portfolio_value[0] - 1.0
+    
+    # Annualized return
+    annualized_return = (1 + total_return) ** (252.0 / n_days) - 1.0
+    
+    # Volatility calculation
+    mean_return = 0.0
+    for i in range(n_days):
+        mean_return += clean_returns[i]
+    mean_return /= n_days
+    
+    variance = 0.0
+    for i in range(n_days):
+        diff = clean_returns[i] - mean_return
+        variance += diff * diff
+    
+    volatility = np.sqrt(variance / (n_days - 1)) * np.sqrt(252.0) if n_days > 1 else 0.0
+    
+    # Sharpe ratio
+    sharpe_ratio = annualized_return / volatility if volatility > 1e-12 else 0.0
+    
+    return total_return, annualized_return, volatility, sharpe_ratio
 
 
 class BacktestingEngine:
@@ -173,7 +287,7 @@ class BacktestingEngine:
                                      start_date: Optional[str] = None,
                                      end_date: Optional[str] = None) -> Tuple[pd.DataFrame, pd.DataFrame]:
         """
-        Preprocess signals and returns with proper alignment and validation.
+        Optimized preprocessing with minimal pandas overhead.
         
         Args:
             signals: Signal weights DataFrame (dates x assets)
@@ -186,60 +300,94 @@ class BacktestingEngine:
         """
         logger.info("Preprocessing signals and returns for backtesting")
         
-        # Ensure both have datetime indices
-        if not isinstance(signals.index, pd.DatetimeIndex):
-            signals.index = pd.to_datetime(signals.index)
-        if not isinstance(returns.index, pd.DatetimeIndex):
-            returns.index = pd.to_datetime(returns.index)
+        # Fast index validation and conversion
+        signals_idx = signals.index
+        returns_idx = returns.index
         
-        # Sort chronologically
-        signals = signals.sort_index()
-        returns = returns.sort_index()
+        if not isinstance(signals_idx, pd.DatetimeIndex):
+            signals_idx = pd.to_datetime(signals_idx)
+            signals = signals.set_index(signals_idx)
+        if not isinstance(returns_idx, pd.DatetimeIndex):
+            returns_idx = pd.to_datetime(returns_idx)
+            returns = returns.set_index(returns_idx)
         
-        # Filter by date range if specified
+        # Fast date filtering with boolean indexing
+        if start_date or end_date:
+            signals, returns = self._filter_by_dates_optimized(
+                signals, returns, start_date, end_date
+            )
+        
+        # Fast alignment using numpy operations
+        return self._align_data_optimized(signals, returns)
+    
+    def _filter_by_dates_optimized(self, 
+                                 signals: pd.DataFrame, 
+                                 returns: pd.DataFrame,
+                                 start_date: Optional[str],
+                                 end_date: Optional[str]) -> Tuple[pd.DataFrame, pd.DataFrame]:
+        """
+        Fast date filtering using boolean masks.
+        """
         if start_date:
             start_dt = pd.to_datetime(start_date)
-            signals = signals[signals.index >= start_dt]
-            returns = returns[returns.index >= start_dt]
+            signals_mask = signals.index >= start_dt
+            returns_mask = returns.index >= start_dt
+            signals = signals.loc[signals_mask]
+            returns = returns.loc[returns_mask]
         
         if end_date:
             end_dt = pd.to_datetime(end_date)
-            signals = signals[signals.index <= end_dt]
-            returns = returns[returns.index <= end_dt]
+            signals_mask = signals.index <= end_dt
+            returns_mask = returns.index <= end_dt
+            signals = signals.loc[signals_mask]
+            returns = returns.loc[returns_mask]
+            
+        return signals, returns
+    
+    def _align_data_optimized(self, 
+                            signals: pd.DataFrame, 
+                            returns: pd.DataFrame) -> Tuple[pd.DataFrame, pd.DataFrame]:
+        """
+        Fast data alignment with minimal copying.
+        """
+        # Use pandas' built-in align method for efficiency
+        signals_aligned, returns_aligned = signals.align(
+            returns, join='inner', axis=0, copy=False
+        )
         
-        # Align indices (inner join to ensure data availability)
-        common_index = signals.index.intersection(returns.index)
-        
-        if len(common_index) == 0:
-            raise ValueError("No overlapping dates between signals and returns")
-        
-        signals_aligned = signals.reindex(common_index, fill_value=0.0)
-        returns_aligned = returns.reindex(common_index, fill_value=0.0)
-        
-        # Align columns (inner join for common assets)
+        # Get common columns efficiently
         common_columns = signals_aligned.columns.intersection(returns_aligned.columns)
         
         if len(common_columns) == 0:
             raise ValueError("No common assets between signals and returns")
         
-        signals_aligned = signals_aligned[common_columns]
-        returns_aligned = returns_aligned[common_columns]
+        # Select common columns (creates view when possible)
+        signals_aligned = signals_aligned.loc[:, common_columns]
+        returns_aligned = returns_aligned.loc[:, common_columns]
         
-        # Remove any remaining NaN values
-        signals_aligned = signals_aligned.fillna(0.0)
-        returns_aligned = returns_aligned.fillna(0.0)
+        # Fast NaN filling using numpy
+        if signals_aligned.isna().any().any():
+            signals_values = signals_aligned.values
+            signals_values[np.isnan(signals_values)] = 0.0
+            signals_aligned = pd.DataFrame(signals_values, 
+                                         index=signals_aligned.index, 
+                                         columns=signals_aligned.columns)
         
-        # Validate signal timing (signals at T should be applied to returns at T+1)
-        # But our signal generator already handles this correctly
+        if returns_aligned.isna().any().any():
+            returns_values = returns_aligned.values
+            returns_values[np.isnan(returns_values)] = 0.0
+            returns_aligned = pd.DataFrame(returns_values, 
+                                         index=returns_aligned.index, 
+                                         columns=returns_aligned.columns)
+        
         logger.info(f"Aligned data: {len(signals_aligned)} dates, {len(common_columns)} assets")
-        
         return signals_aligned, returns_aligned
     
     def apply_position_limits(self, 
                             raw_weights: pd.DataFrame,
                             volatility: Optional[pd.DataFrame] = None) -> pd.DataFrame:
         """
-        Apply position size limits and portfolio constraints.
+        Optimized position limits application using vectorized operations.
         
         Args:
             raw_weights: Raw portfolio weights
@@ -250,25 +398,34 @@ class BacktestingEngine:
         """
         logger.debug("Applying position limits and portfolio constraints")
         
-        adjusted_weights = raw_weights.copy()
+        # Use numpy operations for speed
+        weights_values = raw_weights.values.copy()
         
-        # 1. Apply minimum weight threshold
-        adjusted_weights = adjusted_weights.where(
-            adjusted_weights.abs() >= self.min_weight_threshold, 0.0
-        )
+        # 1. Apply minimum weight threshold (vectorized)
+        mask = np.abs(weights_values) < self.min_weight_threshold
+        weights_values[mask] = 0.0
         
-        # 2. Apply maximum position size limits
-        adjusted_weights = adjusted_weights.clip(-self.max_position_size, self.max_position_size)
+        # 2. Apply maximum position size limits (vectorized)
+        weights_values = np.clip(weights_values, -self.max_position_size, self.max_position_size)
         
-        # 3. Re-normalize weights to account for cash buffer
+        # 3. Re-normalize weights for cash buffer (vectorized by row)
         target_exposure = 1.0 - self.cash_buffer
+        row_sums = np.abs(weights_values).sum(axis=1)
         
-        for date in adjusted_weights.index:
-            row_sum = adjusted_weights.loc[date].abs().sum()
-            if row_sum > target_exposure:
-                # Scale down to respect target exposure
-                scaling_factor = target_exposure / row_sum
-                adjusted_weights.loc[date] *= scaling_factor
+        # Only scale rows that exceed target exposure
+        scale_mask = row_sums > target_exposure
+        scaling_factors = target_exposure / row_sums
+        scaling_factors = np.where(scale_mask, scaling_factors, 1.0)
+        
+        # Apply scaling
+        weights_values = weights_values * scaling_factors.reshape(-1, 1)
+        
+        # Create result DataFrame
+        adjusted_weights = pd.DataFrame(
+            weights_values, 
+            index=raw_weights.index, 
+            columns=raw_weights.columns
+        )
         
         # 4. Handle concentration risk if volatility is provided
         if volatility is not None:
@@ -315,7 +472,7 @@ class BacktestingEngine:
                                   index: pd.DatetimeIndex,
                                   frequency: str = None) -> pd.Series:
         """
-        Create boolean series indicating rebalancing dates.
+        Fast rebalancing schedule creation with vectorized operations.
         
         Args:
             index: DateTime index for the backtest period
@@ -325,37 +482,53 @@ class BacktestingEngine:
             Boolean series indicating rebalancing dates
         """
         freq = frequency or self.rebalance_frequency
-        rebalance_mask = pd.Series(False, index=index)
         
         if freq == 'daily':
-            rebalance_mask[:] = True
-        elif freq == 'weekly':
-            # Rebalance on Mondays
-            rebalance_mask[index.dayofweek == 0] = True
-        elif freq == 'monthly':
-            # Rebalance on first business day of month
-            first_bdays = pd.bdate_range(start=index.min(), end=index.max(), freq='BMS')
-            rebalance_mask[index.isin(first_bdays)] = True
-        elif freq == 'quarterly':
-            # Rebalance on first business day of quarter
-            first_bdays = pd.bdate_range(start=index.min(), end=index.max(), freq='BQS')
-            rebalance_mask[index.isin(first_bdays)] = True
+            # Most common case - simple numpy array creation
+            rebalance_values = np.ones(len(index), dtype=bool)
         else:
-            raise ValueError(f"Unsupported rebalancing frequency: {freq}")
+            # Use vectorized operations for other frequencies
+            rebalance_values = self._create_rebalance_mask_vectorized(index, freq)
         
-        # Always rebalance on first day
+        # Create series with minimal overhead
+        rebalance_mask = pd.Series(rebalance_values, index=index, copy=False)
+        
+        # Ensure first day is always rebalancing day
         if len(rebalance_mask) > 0:
             rebalance_mask.iloc[0] = True
         
-        logger.info(f"Created rebalancing schedule: {rebalance_mask.sum()} rebalancing dates")
+        n_rebalancing = rebalance_mask.sum()
+        logger.info(f"Created rebalancing schedule: {n_rebalancing} rebalancing dates")
         return rebalance_mask
+    
+    def _create_rebalance_mask_vectorized(self, index: pd.DatetimeIndex, freq: str) -> np.ndarray:
+        """
+        Vectorized rebalancing mask creation.
+        """
+        mask = np.zeros(len(index), dtype=bool)
+        
+        if freq == 'weekly':
+            # Monday rebalancing
+            mask = index.dayofweek == 0
+        elif freq == 'monthly':
+            # First business day of month - use pandas built-in efficiency
+            first_bdays = pd.bdate_range(start=index.min(), end=index.max(), freq='BMS')
+            mask = index.isin(first_bdays)
+        elif freq == 'quarterly':
+            # First business day of quarter
+            first_bdays = pd.bdate_range(start=index.min(), end=index.max(), freq='BQS')
+            mask = index.isin(first_bdays)
+        else:
+            raise ValueError(f"Unsupported rebalancing frequency: {freq}")
+        
+        return mask.values if hasattr(mask, 'values') else mask
     
     def calculate_transaction_costs(self, 
                                   weights: pd.DataFrame,
                                   returns: pd.DataFrame,
                                   rebalance_mask: pd.Series) -> pd.DataFrame:
         """
-        Calculate transaction costs including bid-ask spreads and slippage.
+        Optimized transaction cost calculation with vectorized operations.
         
         Args:
             weights: Portfolio weights
@@ -367,36 +540,99 @@ class BacktestingEngine:
         """
         logger.debug("Calculating transaction costs")
         
-        # Base transaction cost
+        # Use vectorized operations for speed
+        return self._calculate_transaction_costs_vectorized(
+            weights.values, returns.values, rebalance_mask.values,
+            weights.index, weights.columns
+        )
+    
+    def _calculate_transaction_costs_vectorized(self,
+                                              weights_np: np.ndarray,
+                                              returns_np: np.ndarray,
+                                              rebalance_mask_np: np.ndarray,
+                                              index: pd.Index,
+                                              columns: pd.Index) -> pd.DataFrame:
+        """
+        Vectorized transaction cost calculation.
+        """
+        T, N = weights_np.shape
+        
+        # Base costs (vectorized)
         base_cost = self.transaction_cost_bps / 10000.0
         slippage_cost = self.slippage_bps / 10000.0
+        total_base_cost = base_cost + slippage_cost
         
-        # Create transaction cost matrix
-        transaction_costs = pd.DataFrame(
-            base_cost + slippage_cost, 
-            index=weights.index, 
-            columns=weights.columns
-        )
+        # Vectorized volatility calculation
+        volatility = self._rolling_std_vectorized(returns_np, window=20, min_periods=10)
         
-        # Adjust costs based on volatility (higher vol = higher costs)
-        volatility = returns.rolling(window=20, min_periods=10).std().fillna(returns.std())
-        vol_adjustment = 1.0 + volatility.clip(0, 0.1)  # Up to 10% adjustment
+        # Apply volatility adjustment (vectorized)
+        vol_adjustment = 1.0 + np.clip(volatility, 0, 0.1)
         
-        transaction_costs = transaction_costs * vol_adjustment
+        # Calculate final transaction costs
+        transaction_costs = total_base_cost * vol_adjustment
         
-        # Only apply costs on rebalancing dates
-        transaction_costs = transaction_costs.multiply(rebalance_mask.astype(float), axis=0)
+        # Apply rebalancing mask
+        transaction_costs = transaction_costs * rebalance_mask_np.reshape(-1, 1)
         
-        return transaction_costs
+        return pd.DataFrame(transaction_costs, index=index, columns=columns)
+    
+    @staticmethod
+    @nb.jit(nopython=True, fastmath=True)
+    def _rolling_std_vectorized(data: np.ndarray, window: int, min_periods: int) -> np.ndarray:
+        """
+        Fast rolling standard deviation using numba.
+        """
+        T, N = data.shape
+        result = np.zeros_like(data)
+        
+        for i in range(N):  # For each asset
+            for t in range(T):  # For each time period
+                start_idx = max(0, t - window + 1)
+                n_obs = t - start_idx + 1
+                
+                if n_obs >= min_periods:
+                    # Calculate rolling std
+                    mean_val = 0.0
+                    for k in range(start_idx, t + 1):
+                        mean_val += data[k, i]
+                    mean_val /= n_obs
+                    
+                    var_val = 0.0
+                    for k in range(start_idx, t + 1):
+                        diff = data[k, i] - mean_val
+                        var_val += diff * diff
+                    
+                    result[t, i] = np.sqrt(var_val / (n_obs - 1)) if n_obs > 1 else 0.0
+                else:
+                    # Use overall std as fallback
+                    if t == T - 1:  # Only calculate once at the end
+                        overall_mean = 0.0
+                        for k in range(T):
+                            overall_mean += data[k, i]
+                        overall_mean /= T
+                        
+                        overall_var = 0.0
+                        for k in range(T):
+                            diff = data[k, i] - overall_mean
+                            overall_var += diff * diff
+                        overall_std = np.sqrt(overall_var / (T - 1)) if T > 1 else 0.0
+                        
+                        # Fill all insufficient periods with overall std
+                        for fill_t in range(T):
+                            if result[fill_t, i] == 0.0:
+                                result[fill_t, i] = overall_std
+        
+        return result
     
     def run_backtest(self, 
                     signals: pd.DataFrame,
                     returns: pd.DataFrame,
                     start_date: Optional[str] = None,
                     end_date: Optional[str] = None,
-                    volatility: Optional[pd.DataFrame] = None) -> Dict[str, Any]:
+                    volatility: Optional[pd.DataFrame] = None,
+                    use_fast_mode: bool = True) -> Dict[str, Any]:
         """
-        Run complete backtest with vectorized calculations.
+        Ultra-optimized backtest with minimal memory allocation and maximum vectorization.
         
         Args:
             signals: Signal weights DataFrame
@@ -404,55 +640,118 @@ class BacktestingEngine:
             start_date: Backtest start date
             end_date: Backtest end date
             volatility: Optional volatility data for risk scaling
+            use_fast_mode: Use fastest vectorized calculations (default: True)
             
         Returns:
             Dictionary with complete backtest results
         """
-        logger.info(f"Starting backtest from {start_date} to {end_date}")
+        logger.info(f"Starting optimized backtest from {start_date} to {end_date}")
+        import time
+        start_time = time.time()
         
-        # Step 1: Preprocess and align data
+        # Step 1: Preprocess and align data (optimized)
         signals_aligned, returns_aligned = self.preprocess_signals_and_returns(
             signals, returns, start_date, end_date
         )
         
-        # Step 2: Apply position limits and constraints
+        # Step 2: Apply position limits (vectorized)
         portfolio_weights = self.apply_position_limits(signals_aligned, volatility)
         
-        # Step 3: Create rebalancing schedule
+        # Step 3: Create rebalancing schedule (fast)
         rebalance_mask = self.create_rebalancing_schedule(portfolio_weights.index)
         
-        # Step 4: Calculate transaction costs
+        # Step 4: Calculate transaction costs (vectorized)
         transaction_costs = self.calculate_transaction_costs(
             portfolio_weights, returns_aligned, rebalance_mask
         )
         
-        # Step 5: Convert to numpy for numba acceleration
+        # Step 5: Convert to numpy arrays (minimal copying)
         weights_np = portfolio_weights.values
         returns_np = returns_aligned.values
         tcosts_np = transaction_costs.values
         rebalance_np = rebalance_mask.values
         
-        # Step 6: Run numba-optimized calculation
-        portfolio_returns, tcosts_paid, turnover = calculate_portfolio_returns_numba(
-            weights_np, returns_np, tcosts_np, rebalance_np
+        # Step 6: Choose calculation method based on performance requirements
+        if use_fast_mode and len(weights_np) > 1000:  # Use vectorized for large datasets
+            portfolio_returns, tcosts_paid, turnover = calculate_portfolio_returns_vectorized(
+                weights_np, returns_np, tcosts_np, rebalance_np
+            )
+        else:
+            portfolio_returns, tcosts_paid, turnover = calculate_portfolio_returns_numba(
+                weights_np, returns_np, tcosts_np, rebalance_np
+            )
+        
+        # Step 7: Efficient series creation with pre-allocated index
+        idx = portfolio_weights.index
+        portfolio_returns_series = pd.Series(portfolio_returns, index=idx, copy=False)
+        tcosts_series = pd.Series(tcosts_paid, index=idx, copy=False)
+        turnover_series = pd.Series(turnover, index=idx, copy=False)
+        
+        # Step 8: Fast portfolio value calculation
+        portfolio_value = self._calculate_portfolio_value_fast(
+            portfolio_returns_series, self.initial_capital
         )
         
-        # Step 7: Convert back to pandas and calculate metrics
-        portfolio_returns_series = pd.Series(portfolio_returns, index=portfolio_weights.index)
-        tcosts_series = pd.Series(tcosts_paid, index=portfolio_weights.index)
-        turnover_series = pd.Series(turnover, index=portfolio_weights.index)
+        # Step 9: Optimized performance metrics
+        total_return, ann_return, volatility_metric, sharpe = calculate_performance_metrics_numba(
+            portfolio_returns, portfolio_value.values
+        )
         
-        # Step 8: Calculate cumulative performance
-        portfolio_value = (1 + portfolio_returns_series).cumprod() * self.initial_capital
-        
-        # Step 9: Calculate drawdowns using numba
-        cumulative_returns = (portfolio_value / self.initial_capital - 1).values
+        # Step 10: Fast drawdown calculation
+        cumulative_returns = portfolio_value.values / self.initial_capital - 1.0
         drawdowns, max_dd, max_dd_start, max_dd_end = calculate_drawdown_numba(cumulative_returns)
-        drawdown_series = pd.Series(drawdowns, index=portfolio_weights.index)
+        drawdown_series = pd.Series(drawdowns, index=idx, copy=False)
         
-        # Step 10: Store detailed results
-        backtest_results = {
-            'portfolio_returns': portfolio_returns_series,
+        # Step 11: Efficient results dictionary construction
+        backtest_results = self._construct_results_dict(
+            portfolio_returns_series, portfolio_value, portfolio_weights,
+            tcosts_series, turnover_series, drawdown_series,
+            returns_aligned, signals_aligned, rebalance_mask,
+            max_dd, max_dd_start, max_dd_end,
+            total_return, ann_return, volatility_metric, sharpe
+        )
+        
+        # Store results
+        self.backtest_results = backtest_results
+        
+        execution_time = time.time() - start_time
+        logger.info(f"Optimized backtest completed in {execution_time:.2f}s: {len(portfolio_weights)} days, "
+                   f"Final value: {portfolio_value.iloc[-1]:,.0f}, "
+                   f"Total return: {total_return*100:.2f}%, "
+                   f"Sharpe: {sharpe:.3f}, Max DD: {max_dd*100:.2f}%")
+        
+        return backtest_results
+    
+    def _calculate_portfolio_value_fast(self, returns: pd.Series, initial_capital: float) -> pd.Series:
+        """
+        Fast portfolio value calculation using numpy.
+        """
+        # Use numpy cumprod for speed
+        cumulative_factors = np.cumprod(1.0 + returns.values)
+        return pd.Series(cumulative_factors * initial_capital, index=returns.index, copy=False)
+    
+    def _construct_results_dict(self, 
+                              portfolio_returns: pd.Series,
+                              portfolio_value: pd.Series,
+                              portfolio_weights: pd.DataFrame,
+                              tcosts_series: pd.Series,
+                              turnover_series: pd.Series,
+                              drawdown_series: pd.Series,
+                              returns_aligned: pd.DataFrame,
+                              signals_aligned: pd.DataFrame,
+                              rebalance_mask: pd.Series,
+                              max_dd: float,
+                              max_dd_start: int,
+                              max_dd_end: int,
+                              total_return: float,
+                              ann_return: float,
+                              volatility_metric: float,
+                              sharpe: float) -> Dict[str, Any]:
+        """
+        Efficient results dictionary construction.
+        """
+        return {
+            'portfolio_returns': portfolio_returns,
             'portfolio_value': portfolio_value,
             'portfolio_weights': portfolio_weights,
             'transaction_costs': tcosts_series,
@@ -472,18 +771,12 @@ class BacktestingEngine:
                 'max_drawdown': max_dd,
                 'max_dd_start_date': portfolio_weights.index[max_dd_start] if max_dd_start < len(portfolio_weights) else None,
                 'max_dd_end_date': portfolio_weights.index[max_dd_end] if max_dd_end < len(portfolio_weights) else None,
+                'total_return': total_return,
+                'annualized_return': ann_return,
+                'volatility': volatility_metric,
+                'sharpe_ratio': sharpe,
             }
         }
-        
-        # Store in instance for access
-        self.backtest_results = backtest_results
-        
-        logger.info(f"Backtest completed: {len(portfolio_weights)} days, "
-                   f"Final value: {portfolio_value.iloc[-1]:,.0f}, "
-                   f"Total return: {(portfolio_value.iloc[-1]/self.initial_capital-1)*100:.2f}%, "
-                   f"Max drawdown: {max_dd*100:.2f}%")
-        
-        return backtest_results
     
     def calculate_trade_analysis(self, backtest_results: Dict[str, Any]) -> pd.DataFrame:
         """
