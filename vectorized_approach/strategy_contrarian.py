@@ -4,7 +4,7 @@ import matplotlib.pyplot as plt
 
 def calculate_transaction_costs(strategy_returns, ticker, cost_per_trade_pips=0.5):
     """
-    Calcola i costi di transazione basati sui segnali di trading.
+    Calcola i costi di transazione basati sui segnali di trading per FOREX.
     
     Parameters:
     - strategy_returns: Serie pandas dei ritorni della strategia (0 quando non in trade)
@@ -42,7 +42,120 @@ def calculate_transaction_costs(strategy_returns, ticker, cost_per_trade_pips=0.
     
     return transaction_costs
 
-def strategy(data, timeframe='D', return_full_data=False, apply_transaction_costs=True):
+def calculate_futures_transaction_costs_ibkr(strategy_returns, ticker, volume_tier=1):
+    """
+    Calcola i costi di transazione per FUTURES basati sulla struttura commissioni IBKR realistica.
+    
+    Parameters:
+    - strategy_returns: Serie pandas dei ritorni della strategia (0 quando non in trade)
+    - ticker: Nome del future commodity (es. 'CL=F', 'GC=F')  
+    - volume_tier: Tier volumetrico IBKR (1-4, default 1 per retail)
+                  1: ≤1000 contracts ($0.85 execution)
+                  2: 1001-10000 contracts ($0.65 execution)
+                  3: 10001-20000 contracts ($0.45 execution)  
+                  4: >20000 contracts ($0.25 execution)
+    
+    Returns:
+    - transaction_costs: Serie pandas dei costi di transazione per ogni trade
+    """
+    
+    # IBKR Execution Fees per volume tier
+    execution_fees = {
+        1: 0.85,  # Retail trader
+        2: 0.65,  # Active trader
+        3: 0.45,  # High volume
+        4: 0.25   # Institutional
+    }
+    
+    # Exchange fees specifici per categoria di futures (basati su ricerca IBKR)
+    exchange_fees = {
+        # Energia (NYMEX)
+        'CL=F': 1.38,  # Crude Oil WTI - più liquido
+        'NG=F': 1.50,  # Natural Gas - volatile
+        'BZ=F': 1.40,  # Brent Crude
+        'RB=F': 1.45,  # RBOB Gasoline  
+        'HO=F': 1.45,  # Heating Oil
+        
+        # Metalli Preziosi (COMEX)
+        'GC=F': 1.25,  # Gold - molto liquido
+        'SI=F': 1.30,  # Silver
+        'PA=F': 1.35,  # Palladium
+        
+        # Metalli Industriali
+        'HG=F': 1.20,  # Copper - molto liquido
+        
+        # Agricoltura (CBOT/CME)
+        'ZC=F': 1.00,  # Corn - molto liquido
+        'ZW=F': 1.05,  # Wheat
+        'ZS=F': 1.00,  # Soybeans - molto liquido
+        
+        # Soft Commodities
+        'SB=F': 1.15,  # Sugar
+        'CT=F': 1.20,  # Cotton
+        'CC=F': 1.25   # Cocoa
+    }
+    
+    # Regulatory fees (tipici per futures)
+    regulatory_fee = 0.02
+    
+    # Calcola commissione totale per contratto
+    execution_fee = execution_fees.get(volume_tier, 0.85)
+    exchange_fee = exchange_fees.get(ticker, 1.30)  # Default per futures non listati
+    total_fee_per_contract = execution_fee + exchange_fee + regulatory_fee
+    
+    # Identifica i segnali di trading (entrate/uscite)
+    is_in_trade = (strategy_returns != 0)
+    trade_starts = is_in_trade & ~is_in_trade.shift(1).fillna(False)  # Entrate
+    trade_ends = ~is_in_trade & is_in_trade.shift(1).fillna(False)    # Uscite
+    
+    # Per i futures, applichiamo il costo come frazione del movimento medio
+    # Assumiamo che ogni trade rappresenti 1 contratto
+    # Il costo viene espresso come frazione dei ritorni per compatibilità con il sistema esistente
+    
+    # Stima il valore nozionale medio del contratto per convertire $ in frazione
+    # Basato sui prezzi tipici dei contratti (approssimazione conservativa)
+    contract_values = {
+        # Energia (valore nozionale approssimativo)
+        'CL=F': 75000,    # 1000 barili * ~$75/barile
+        'NG=F': 30000,    # 10000 MMBtu * ~$3/MMBtu
+        'BZ=F': 80000,    # 1000 barili * ~$80/barile
+        'RB=F': 60000,    # 42000 galloni * ~$1.40/gallon
+        'HO=F': 65000,    # 42000 galloni * ~$1.55/gallon
+        
+        # Metalli Preziosi  
+        'GC=F': 200000,   # 100 oz * ~$2000/oz
+        'SI=F': 120000,   # 5000 oz * ~$24/oz
+        'PA=F': 100000,   # 100 oz * ~$1000/oz
+        
+        # Metalli Industriali
+        'HG=F': 90000,    # 25000 lbs * ~$3.60/lb
+        
+        # Agricoltura
+        'ZC=F': 25000,    # 5000 bushels * ~$5/bushel
+        'ZW=F': 30000,    # 5000 bushels * ~$6/bushel  
+        'ZS=F': 70000,    # 5000 bushels * ~$14/bushel
+        
+        # Soft Commodities
+        'SB=F': 25000,    # 112000 lbs * ~$0.22/lb
+        'CT=F': 35000,    # 50000 lbs * ~$0.70/lb
+        'CC=F': 30000     # 10 metric tons * ~$3000/ton
+    }
+    
+    contract_value = contract_values.get(ticker, 50000)  # Default $50k nozionale
+    cost_as_fraction = total_fee_per_contract / contract_value
+    
+    # Calcola i costi di transazione
+    transaction_costs = pd.Series(0.0, index=strategy_returns.index)
+    
+    # Costo per entrate
+    transaction_costs[trade_starts] = cost_as_fraction
+    
+    # Costo per uscite  
+    transaction_costs[trade_ends] = cost_as_fraction
+    
+    return transaction_costs
+
+def strategy(data, timeframe='D', return_full_data=False, apply_transaction_costs=True, instrument_type='forex', volume_tier=1):
     # Raggruppa per giorno e prendi l'ultimo prezzo, tieni solo le close, calcola i ritorni percentuali giornalieri
     prices = data.resample('D').last()
     prices = prices[['Close']]
@@ -55,11 +168,13 @@ def strategy(data, timeframe='D', return_full_data=False, apply_transaction_cost
     # Applica i costi di transazione se richiesto
     if apply_transaction_costs:
         # Estrai il ticker dal dataframe o usa un valore di default
-        # Assumiamo che il ticker sia passato come attributo del dataframe o calcoliamo i costi generici
         ticker = getattr(data, 'ticker', 'GENERIC')  # Fallback per ticker generico
         
-        # Calcola i costi di transazione
-        transaction_costs = calculate_transaction_costs(returns['strategy_returns'], ticker)
+        # Calcola i costi di transazione in base al tipo di strumento
+        if instrument_type == 'futures':
+            transaction_costs = calculate_futures_transaction_costs_ibkr(returns['strategy_returns'], ticker, volume_tier)
+        else:  # forex (default)
+            transaction_costs = calculate_transaction_costs(returns['strategy_returns'], ticker)
         
         # Sottrai i costi dai ritorni della strategia
         returns['strategy_returns_gross'] = returns['strategy_returns'].copy()
