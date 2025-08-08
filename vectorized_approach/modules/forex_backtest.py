@@ -1,11 +1,11 @@
 import pandas as pd
 import yfinance as yf
 import os
-from strategy_contrarian import strategy, rebalance_risk_parity
+from .strategy_contrarian import strategy, rebalance_risk_parity
 import warnings
 warnings.filterwarnings('ignore')
 
-def download_and_save_data(tickers, start_date='2010-01-01', end_date='2025-12-31', data_dir='data/raw_data'):
+def download_and_save_data(tickers, start_date='2010-01-01', end_date='2025-12-31', data_dir='../forex/data/raw'):
     """
     Download forex data for all tickers and save to disk to avoid re-downloading
     """
@@ -38,7 +38,7 @@ def download_and_save_data(tickers, start_date='2010-01-01', end_date='2025-12-3
     
     return data_dict
 
-def batch_backtest_contrarian(data_dict, results_dir='data/backtest_results'):
+def batch_backtest_contrarian(data_dict, results_dir='../forex/data/results'):
     """
     Run contrarian strategy on all forex pairs and save equity curves
     """
@@ -136,7 +136,7 @@ def create_risk_parity_portfolio(equity_curves, n=22, threshold=-0.1, shift=1):
     portfolio_df = rebalance_risk_parity(strategy_prices, n=n, threshold=threshold, shift=shift)
     
     # Save portfolio results
-    portfolio_file = os.path.join('data/backtest_results', 'risk_parity_portfolio.parquet')
+    portfolio_file = os.path.join('../forex/data/results', 'risk_parity_portfolio.parquet')
     portfolio_df.to_parquet(portfolio_file)
     
     print(f"Risk parity portfolio created - Final equity: {portfolio_df['equity'].iloc[-1]:.4f}")

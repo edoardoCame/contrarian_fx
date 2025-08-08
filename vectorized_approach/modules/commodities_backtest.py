@@ -1,11 +1,11 @@
 import pandas as pd
 import yfinance as yf
 import os
-from strategy_contrarian import strategy, rebalance_risk_parity
+from .strategy_contrarian import strategy, rebalance_risk_parity
 import warnings
 warnings.filterwarnings('ignore')
 
-def download_and_save_commodities_data(tickers, start_date='2010-01-01', end_date='2025-12-31', data_dir='data/commodities_futures_raw'):
+def download_and_save_commodities_data(tickers, start_date='2010-01-01', end_date='2025-12-31', data_dir='../commodities/data/raw'):
     """
     Download commodity futures data for all tickers and save to disk to avoid re-downloading
     """
@@ -49,7 +49,7 @@ def download_and_save_commodities_data(tickers, start_date='2010-01-01', end_dat
     
     return data_dict
 
-def batch_backtest_commodities_contrarian(data_dict, volume_tier=1, results_dir='data/commodities_futures_results'):
+def batch_backtest_commodities_contrarian(data_dict, volume_tier=1, results_dir='../commodities/data/results'):
     """
     Run contrarian strategy on all commodity futures and save equity curves
     """
@@ -147,7 +147,7 @@ def create_commodities_risk_parity_portfolio(equity_curves, n=22, threshold=-0.1
     portfolio_df = rebalance_risk_parity(strategy_prices, n=n, threshold=threshold, shift=shift)
     
     # Save portfolio results
-    results_dir = 'data/commodities_futures_results'
+    results_dir = '../commodities/data/results'
     os.makedirs(results_dir, exist_ok=True)
     portfolio_file = os.path.join(results_dir, 'risk_parity_portfolio.parquet')
     portfolio_df.to_parquet(portfolio_file)
