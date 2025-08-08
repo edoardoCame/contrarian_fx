@@ -50,10 +50,13 @@ def batch_backtest_contrarian(data_dict, results_dir='data/backtest_results'):
         try:
             print(f"Processing {ticker}...")
             
+            # Add ticker as attribute to data for transaction cost calculation
+            data.ticker = ticker
+            
             # Apply contrarian strategy and get full data for proper metrics calculation
             # Line 13 in strategy.py: returns['strategy_returns'] = np.where(returns.shift(1) < 0, returns['Close'], 0)
             # The shift(1) ensures we use previous day's return, preventing lookahead bias
-            full_data = strategy(data, timeframe='D', return_full_data=True)
+            full_data = strategy(data, timeframe='D', return_full_data=True, apply_transaction_costs=True)
             equity = full_data['Cumulative_Returns']
             strategy_returns = full_data['strategy_returns']
             

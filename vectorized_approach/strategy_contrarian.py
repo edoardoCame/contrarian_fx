@@ -2,7 +2,47 @@ import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 
-def strategy(data, timeframe='D', return_full_data=False):
+def calculate_transaction_costs(strategy_returns, ticker, cost_per_trade_pips=0.5):
+    """
+    Calcola i costi di transazione basati sui segnali di trading.
+    
+    Parameters:
+    - strategy_returns: Serie pandas dei ritorni della strategia (0 quando non in trade)
+    - ticker: Nome della coppia forex (es. 'USDJPY=X')
+    - cost_per_trade_pips: Costo in pip per ogni entrata/uscita (default 0.5)
+    
+    Returns:
+    - transaction_costs: Serie pandas dei costi di transazione per ogni trade
+    """
+    # Determina il valore del pip come frazione per il calcolo dei costi
+    # 0.5 pip come frazione molto piccola dei ritorni giornalieri
+    if any(jpy in ticker.upper() for jpy in ['JPY']):
+        # Per le coppie JPY: 0.5 pip = frazione minima dei ritorni giornalieri
+        pip_value = 0.00005  # 0.005% del valore (molto conservativo)
+    else:
+        # Per tutte le altre coppie: 0.5 pip = frazione minima
+        pip_value = 0.00005  # 0.005% del valore (molto conservativo)
+    
+    # Identifica i segnali di trading (entrate/uscite)
+    # Un trade inizia quando strategy_returns passa da 0 a != 0
+    # Un trade finisce quando strategy_returns passa da != 0 a 0
+    
+    is_in_trade = (strategy_returns != 0)
+    trade_starts = is_in_trade & ~is_in_trade.shift(1).fillna(False)  # Entrate
+    trade_ends = ~is_in_trade & is_in_trade.shift(1).fillna(False)    # Uscite
+    
+    # Calcola i costi: 0.5 pip per entrata + 0.5 pip per uscita
+    transaction_costs = pd.Series(0.0, index=strategy_returns.index)
+    
+    # Costo per entrate (0.5 pip)
+    transaction_costs[trade_starts] = cost_per_trade_pips * pip_value
+    
+    # Costo per uscite (0.5 pip) 
+    transaction_costs[trade_ends] = cost_per_trade_pips * pip_value
+    
+    return transaction_costs
+
+def strategy(data, timeframe='D', return_full_data=False, apply_transaction_costs=True):
     # Raggruppa per giorno e prendi l'ultimo prezzo, tieni solo le close, calcola i ritorni percentuali giornalieri
     prices = data.resample('D').last()
     prices = prices[['Close']]
@@ -11,6 +51,20 @@ def strategy(data, timeframe='D', return_full_data=False):
 
     # Strategia Contrarian - usa i ritorni percentuali, non i valori assoluti
     returns['strategy_returns'] = np.where(returns['Close'].shift(1) < 0, returns['Close'], 0)
+
+    # Applica i costi di transazione se richiesto
+    if apply_transaction_costs:
+        # Estrai il ticker dal dataframe o usa un valore di default
+        # Assumiamo che il ticker sia passato come attributo del dataframe o calcoliamo i costi generici
+        ticker = getattr(data, 'ticker', 'GENERIC')  # Fallback per ticker generico
+        
+        # Calcola i costi di transazione
+        transaction_costs = calculate_transaction_costs(returns['strategy_returns'], ticker)
+        
+        # Sottrai i costi dai ritorni della strategia
+        returns['strategy_returns_gross'] = returns['strategy_returns'].copy()
+        returns['transaction_costs'] = transaction_costs
+        returns['strategy_returns'] = returns['strategy_returns'] - transaction_costs
 
     # Calcola i ritorni cumulativi della strategia
     cumulative_returns = (1 + returns['strategy_returns']).cumprod() - 1
